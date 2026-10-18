@@ -4,6 +4,7 @@ import AppError from '../utils/app-error.js'
 const supportedTransitions = {
   PRIVACY_REVIEWED: ['NOT_STARTED', 'PRIVACY_REVIEWED'],
   GMAIL_PENDING: ['PRIVACY_REVIEWED', 'GMAIL_PENDING'],
+  COMPLETED: ['GMAIL_PENDING', 'SCAN_PENDING', 'COMPLETED'],
 }
 
 function getOnboarding(request, response) {

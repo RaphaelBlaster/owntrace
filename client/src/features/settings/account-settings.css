@@ -1,0 +1,179 @@
+.settings-page {
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: clamp(1rem, 3vw, 2rem);
+  color: var(--color-text);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(92, 221, 142, 0.09), transparent 26rem),
+    var(--color-bg);
+}
+
+.settings-shell {
+  width: min(100%, 72rem);
+  margin-inline: auto;
+}
+
+.settings-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.5fr);
+  gap: clamp(2rem, 8vw, 7rem);
+  align-items: end;
+  padding-block: clamp(4rem, 9vw, 7rem) 3rem;
+}
+
+.settings-eyebrow {
+  margin: 0 0 0.85rem;
+  color: var(--color-accent);
+  font-size: 0.7rem;
+  font-weight: 780;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.settings-intro h1 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: clamp(3rem, 7vw, 5.8rem);
+  font-weight: 710;
+  letter-spacing: -0.065em;
+  line-height: 0.96;
+  text-wrap: balance;
+}
+
+.settings-intro > p,
+.settings-danger-copy > p:last-child {
+  margin: 0;
+  color: var(--color-text-subtle);
+  line-height: 1.7;
+}
+
+.settings-data-card,
+.settings-danger-card {
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-card);
+}
+
+.settings-data-card {
+  display: grid;
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1fr);
+  gap: 2rem;
+}
+
+.settings-data-card h2,
+.settings-danger-card h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: clamp(1.75rem, 4vw, 2.8rem);
+  letter-spacing: -0.045em;
+}
+
+.settings-data-card ul {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-data-card li {
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.settings-danger-card {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(18rem, 0.55fr);
+  gap: 1.5rem clamp(2rem, 7vw, 5rem);
+  margin-block: 1rem 5rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 142, 134, 0.18), var(--shadow-card);
+}
+
+.settings-danger-copy > p:last-child {
+  margin-top: 0.85rem;
+}
+
+.settings-delete-form {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
+
+.settings-delete-form label {
+  margin-top: 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-weight: 680;
+}
+
+.settings-delete-form input {
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.035);
+  font: inherit;
+}
+
+.settings-delete-form button {
+  min-height: 2.9rem;
+  margin-top: 0.65rem;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: #ff8e86;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.settings-delete-form button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.settings-delete-form input:focus-visible,
+.settings-delete-form button:focus-visible {
+  outline: 3px solid var(--color-accent-strong);
+  outline-offset: 3px;
+}
+
+.settings-error,
+.settings-provider-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.settings-error {
+  color: var(--color-danger);
+  background: rgba(255, 142, 134, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 142, 134, 0.16);
+}
+
+.settings-provider-note {
+  color: var(--color-text-subtle);
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+@media (max-width: 48rem) {
+  .settings-intro,
+  .settings-data-card,
+  .settings-danger-card {
+    grid-template-columns: 1fr;
+  }
+}

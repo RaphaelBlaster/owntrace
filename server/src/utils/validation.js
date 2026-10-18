@@ -72,4 +72,31 @@ function validateLoginInput(body) {
   return { data: { email, password }, errors }
 }
 
-export { normalizeEmail, validateLoginInput, validateRegistrationInput }
+function validateAccountDeletionInput(body) {
+  if (!isPlainObject(body)) {
+    return { errors: { form: 'A JSON request body is required.' } }
+  }
+
+  const password = body.password
+  const confirmation = body.confirmation
+  const errors = {}
+
+  if (typeof password !== 'string' || !password) {
+    errors.password = 'Password is required to delete your account.'
+  } else if (password.length > 128) {
+    errors.password = 'Password must be 128 characters or fewer.'
+  }
+
+  if (confirmation !== 'DELETE') {
+    errors.confirmation = 'Type DELETE to confirm permanent account deletion.'
+  }
+
+  return { data: { password }, errors }
+}
+
+export {
+  normalizeEmail,
+  validateAccountDeletionInput,
+  validateLoginInput,
+  validateRegistrationInput,
+}

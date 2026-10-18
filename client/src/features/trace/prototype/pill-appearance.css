@@ -1,0 +1,29 @@
+/* Editable preview surface. Local preview updates this file without resetting the composer. */
+[data-composer-body]{
+  position:relative;overflow:hidden;
+  background:#000!important;
+  background-color:#000!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.15),inset 0 -1px 0 rgba(255,255,255,.035)!important;
+}
+.trace-editor{font-weight:500!important}
+.trace-editor::placeholder{font-weight:inherit}
+[data-snapshot-node="11"] svg,[data-snapshot-node="47"] svg{color:#eceae7!important}
+[data-snapshot-node="41"],[data-snapshot-node="42"]{color:rgba(255,255,255,.8)!important}
+[data-snapshot-node="56"]{width:30px!important}
+[data-snapshot-node="57"]{width:30px!important;height:30px!important;min-width:30px!important;flex-shrink:0}
+[data-snapshot-node="58"]{width:18px!important;height:18px!important}
+:host([thin]) [data-snapshot-node="0"],:host([thin]) [data-snapshot-node="1"],
+:host([thin]) [data-composer-body]{height:46px}
+:host([thin]) [data-composer-body]{border-radius:23px!important}
+:host([thin]) [data-composer-footer-responsive]{height:44px;padding-top:4px;padding-bottom:4px}
+/* Design units: fit() scales height and controls continuously with the viewport. */
+:host([thin]){--pill-display-thickness:36px}
+:host([thin]:not([expanded])) [data-composer-body]{min-height:var(--pill-display-thickness)!important;border-radius:calc(var(--pill-display-thickness)/2)!important}
+:host([thin]:not([expanded])) .trace-layout{min-height:calc(var(--pill-display-thickness) - 2px);padding-top:2px;padding-bottom:2px}
+:host([thin]:not([expanded])) .trace-layout>[data-snapshot-node="11"],
+:host([thin]:not([expanded])) [data-snapshot-node="47"]{width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;align-self:center;justify-self:center}
+
+.trace-layout,.trace-files{position:relative;z-index:1}

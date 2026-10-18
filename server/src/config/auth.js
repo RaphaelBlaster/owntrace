@@ -1,4 +1,4 @@
-const SESSION_COOKIE_NAME = 'owntrace_session'
+const SESSION_COOKIE_NAME = process.env.NODE_ENV === 'production' ? '__Host-owntrace_session' : 'owntrace_session'
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000
 const TOKEN_AUDIENCE = 'owntrace-web'
 const TOKEN_ISSUER = 'owntrace'

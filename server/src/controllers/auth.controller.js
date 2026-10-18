@@ -1,18 +1,22 @@
 import {
   authenticateUser,
+  deleteUserAccount,
   getUserById,
   registerUser,
   serializeUser,
 } from '../services/auth.service.js'
 import { SESSION_COOKIE_NAME } from '../config/auth.js'
 import AppError from '../utils/app-error.js'
+import { issueSession, revokeSession, verifyActiveSession } from '../services/session.service.js'
 import {
   clearSessionCookie,
-  createSessionToken,
   setSessionCookie,
-  verifySessionToken,
 } from '../utils/session.js'
-import { validateLoginInput, validateRegistrationInput } from '../utils/validation.js'
+import {
+  validateAccountDeletionInput,
+  validateLoginInput,
+  validateRegistrationInput,
+} from '../utils/validation.js'
 
 function throwValidationError(errors) {
   if (Object.keys(errors).length) {
@@ -25,7 +29,7 @@ async function register(request, response) {
   throwValidationError(errors)
 
   const user = await registerUser(data)
-  setSessionCookie(response, createSessionToken(user.id))
+  setSessionCookie(response, await issueSession(user.id))
 
   response.status(201).json({ success: true, user: serializeUser(user) })
 }
@@ -35,18 +39,32 @@ async function login(request, response) {
   throwValidationError(errors)
 
   const user = await authenticateUser(data)
-  setSessionCookie(response, createSessionToken(user.id))
+  setSessionCookie(response, await issueSession(user.id))
 
   response.status(200).json({ success: true, user: serializeUser(user) })
 }
 
-function logout(_request, response) {
+async function logout(request, response) {
+  await revokeSession(request.cookies?.[SESSION_COOKIE_NAME])
   clearSessionCookie(response)
   response.status(200).json({ success: true, message: 'Signed out successfully.' })
 }
 
 async function me(request, response) {
   response.status(200).json({ success: true, user: serializeUser(request.user) })
+}
+
+async function deleteAccount(request, response) {
+  const { data, errors } = validateAccountDeletionInput(request.body)
+  throwValidationError(errors)
+
+  const result = await deleteUserAccount(request.auth.userId, data.password)
+  clearSessionCookie(response)
+  response.status(200).json({
+    success: true,
+    deleted: true,
+    providerRevocation: result.providerRevocation,
+  })
 }
 
 async function session(request, response) {
@@ -60,8 +78,9 @@ async function session(request, response) {
   let payload
 
   try {
-    payload = verifySessionToken(token)
-  } catch {
+    payload = await verifyActiveSession(token)
+  } catch (error) {
+    if (!(error instanceof AppError) || error.code !== 'INVALID_SESSION') throw error
     clearSessionCookie(response)
     response.status(200).json({ success: true, user: null })
     return
@@ -78,4 +97,4 @@ async function session(request, response) {
   }
 }
 
-export { login, logout, me, register, session }
+export { deleteAccount, login, logout, me, register, session }

@@ -21,25 +21,25 @@ const steps = [
     eyebrow: 'Privacy approach',
     title: 'Derive useful signals, keep less source data.',
     description:
-      'For Gmail discovery, OwnTrace will request only the access needed for the implemented scan and prefer derived account evidence over stored inbox content.',
+      'For connected mail discovery, OwnTrace will request only the access needed for the implemented scan and prefer derived account evidence over stored inbox content.',
     points: [
       ['What may be read', 'Message metadata and limited account-related signals needed for classification.'],
       ['What is retained', 'Service, sender domain, dates, evidence type, and explainable confidence inputs.'],
       ['What is avoided', 'Full message bodies, raw OAuth tokens in the browser, and unnecessary provider data.'],
     ],
-    action: 'Understand the Gmail connection',
+    action: 'Understand mail connections',
   },
   {
-    eyebrow: 'Gmail connection',
+    eyebrow: 'Mail connections',
     title: 'Use inbox signals to surface possible accounts.',
     description:
       'Verification, password-reset, welcome, and security messages can provide account evidence. Marketing email alone will not be treated as proof that you own an account.',
     points: [
-      ['Before consent', 'Google will show the requested permissions before access is granted.'],
+      ['Before consent', 'Each provider will show the requested permissions before access is granted.'],
       ['During a scan', 'OwnTrace will process in controlled batches and show connection or scan status.'],
-      ['Your control', 'You will be able to disconnect Google and remove stored integration data.'],
+      ['Your control', 'You will be able to disconnect a provider and remove its stored integration data.'],
     ],
-    action: 'Continue to Gmail connection',
+    action: 'Continue to mail connections',
   },
 ]
 
@@ -56,6 +56,7 @@ function OnboardingPage() {
   const [stepIndex, setStepIndex] = useState(() => getInitialStep(user.onboardingStatus))
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
+  const isReviewingCompletedSetup = ['SCAN_PENDING', 'COMPLETED'].includes(user.onboardingStatus)
   const step = steps[stepIndex]
   const progress = useMemo(() => `${stepIndex + 1} of ${steps.length}`, [stepIndex])
 
@@ -70,15 +71,19 @@ function OnboardingPage() {
 
     try {
       if (stepIndex === 0) {
-        await api.patch('/onboarding', { status: 'PRIVACY_REVIEWED' })
-        await restoreSession({ showLoading: false })
+        if (user.onboardingStatus === 'NOT_STARTED') {
+          await api.patch('/onboarding', { status: 'PRIVACY_REVIEWED' })
+          await restoreSession({ showLoading: false })
+        }
         showStep(1)
       } else if (stepIndex === 1) {
         showStep(2)
       } else {
-        await api.patch('/onboarding', { status: 'GMAIL_PENDING' })
-        await restoreSession({ showLoading: false })
-        navigate('/connect/gmail', { replace: true })
+        if (!isReviewingCompletedSetup && user.onboardingStatus !== 'GMAIL_PENDING') {
+          await api.patch('/onboarding', { status: 'GMAIL_PENDING' })
+          await restoreSession({ showLoading: false })
+        }
+        navigate('/connect', { replace: true })
       }
     } catch (requestError) {
       setError(
@@ -127,7 +132,11 @@ function OnboardingPage() {
               </button>
             ) : <span />}
             <button type="button" className="onboarding-continue" onClick={continueOnboarding} disabled={isSaving}>
-              {isSaving ? 'Saving…' : step.action}
+              {isSaving
+                ? 'Saving…'
+                : isReviewingCompletedSetup && stepIndex === steps.length - 1
+                  ? 'Return to mail connections'
+                  : step.action}
             </button>
           </div>
         </section>

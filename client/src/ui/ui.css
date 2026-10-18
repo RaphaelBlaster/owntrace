@@ -1,0 +1,188 @@
+/* OwnTrace UI kit. Legacy feature selectors below are the migration adapter. */
+:root {
+  --ui-canvas: #f5f4ef;
+  --ui-surface: #ffffff;
+  --ui-ink: #172026;
+  --ui-muted: #58656d;
+  --ui-line: #dce0db;
+  --ui-accent: #b9f66b;
+  --ui-cyan: #dff8fe;
+  --ui-danger: #b13830;
+  --ui-focus: #137a91;
+  --ui-radius: 14px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  --color-bg: var(--ui-canvas);
+  --color-bg-soft: #efeee8;
+  --color-surface: var(--ui-surface);
+  --color-surface-elevated: #f8f9f6;
+  --color-surface-soft: #edf0ea;
+  --color-text: var(--ui-ink);
+  --color-text-muted: var(--ui-muted);
+  --color-text-soft: #5f6c74;
+  --color-text-subtle: #657169;
+  --color-accent: #326b22;
+  --color-accent-strong: #205717;
+  --color-accent-deep: #eaf5de;
+  --color-border: var(--ui-line);
+  --color-border-strong: #b8c3bc;
+  --color-danger: var(--ui-danger);
+  --color-warning: #80580d;
+  --color-info: #156578;
+  --color-signal-cyan: #137a91;
+  --color-signal-violet: #67539a;
+  --color-signal-coral: #b85a40;
+  --radius-sm: 8px;
+  --radius-md: var(--ui-radius);
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+  --shadow-card: 0 3px 12px #17202606;
+  --shadow-soft: 0 2px 6px #17202604;
+  color-scheme: light;
+}
+body { font-size: 15px; }
+.skip-link { position: fixed; z-index: 100; top: 12px; left: 12px; transform: translateY(-200%); padding: 12px 16px; border-radius: 8px; color: white; background: var(--ui-ink); }
+.skip-link:focus { transform: translateY(0); }
+input, select, textarea { font-family: var(--font-sans); }
+:is(.privacy-workspace, .auth-page, .onboarding-page, .legal-shell, .ui-kit-page) :is(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 3px; }
+.ui-brand-mark { position: relative; display: inline-block; width: 26px; height: 26px; flex: 0 0 auto; border: 1.5px solid #55d4f2; border-radius: 50%; }
+.ui-brand-mark::after { position: absolute; content: ''; width: 6px; height: 6px; top: 8px; left: 8px; background: var(--ui-accent); border-radius: 50%; }
+.ui-brand-mark i { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #55d4f2; }
+.ui-brand-mark i:first-child { top: -3px; left: 10px; }
+.ui-brand-mark i:nth-child(2) { right: -2px; bottom: 4px; }
+.ui-brand-mark i:last-child { bottom: -2px; left: 3px; background: var(--ui-accent); }
+.ui-page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 32px; }
+.ui-eyebrow { margin: 0 0 10px; color: #52704d; font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.ui-page-header h1 { margin: 0; color: var(--ui-ink); font-size: clamp(28px, 3vw, 38px); line-height: 1.15; font-weight: 720; letter-spacing: -.04em; }
+.ui-description { max-width: 640px; margin: 12px 0 0; color: var(--ui-muted); font-size: 15px; line-height: 1.65; }
+.ui-header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ui-card { padding: 24px; border: 1px solid var(--ui-line); border-radius: var(--ui-radius); background: var(--ui-surface); box-shadow: var(--shadow-card); }
+.ui-card h2 { margin: 0 0 16px; font-size: 20px; font-weight: 700; letter-spacing: -.025em; }
+.ui-card small { color: var(--ui-muted); line-height: 1.6; }
+.ui-button { display: inline-flex; min-height: 44px; justify-content: center; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--ui-line); border-radius: 8px; color: var(--ui-ink); background: white; font: inherit; font-size: 14px; font-weight: 650; line-height: 1.3; text-decoration: none; cursor: pointer; transition: background 150ms, border-color 150ms; }
+.ui-button:hover { background: #f0f3ee; border-color: #a7b4a6; }
+.ui-button--primary { background: var(--ui-ink); border-color: var(--ui-ink); color: white; }
+.ui-button--primary:hover { background: #2b383e; border-color: #2b383e; }
+.ui-button--quiet { background: transparent; border-color: transparent; }
+.ui-button--danger { color: var(--ui-danger); background: #fff2ef; border-color: #e7beb8; }
+.ui-button:disabled { opacity: .45; cursor: not-allowed; }
+.ui-badge { display: inline-flex; align-items: center; width: fit-content; min-height: 26px; padding: 4px 9px; border: 1px solid var(--ui-line); border-radius: 6px; background: #f4f5f2; color: var(--ui-muted); font-size: 11px; font-weight: 650; line-height: 1.3; }
+.ui-badge--good, .ui-badge--low { color: #326b22; background: #edf6e6; border-color: #cddfbd; }
+.ui-badge--medium { color: #80580d; background: #fff6dc; border-color: #e9d7a0; }
+.ui-badge--high, .ui-badge--error { color: var(--ui-danger); background: #fff0ed; border-color: #e9c5bd; }
+.ui-feedback { display: flex; align-items: center; gap: 16px; min-height: 132px; padding: 24px; margin: 16px 0; border: 1px dashed var(--ui-line); border-radius: var(--ui-radius); background: #f8f9f6; }
+.ui-feedback strong { color: var(--ui-ink); font-size: 15px; }
+.ui-feedback p { max-width: 580px; margin: 5px 0 0; font-size: 14px; line-height: 1.6; color: var(--ui-muted); }
+.ui-feedback-mark { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border: 1px solid var(--ui-line); border-radius: 10px; background: white; color: #52704d; }
+.ui-feedback--error { min-height: auto; border-style: solid; border-color: #e9c5bd; background: #fff5f2; }
+.ui-feedback--error :is(p, .ui-feedback-mark) { color: var(--ui-danger); }
+.ui-spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--ui-line); border-top-color: var(--ui-focus); border-radius: 50%; animation: ui-spin .8s linear infinite; }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+.ui-pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 16px; margin-top: 24px; font-size: 13px; color: var(--ui-muted); }
+.ui-field { display: grid; gap: 8px; margin-top: 16px; font-size: 13px; font-weight: 650; }
+.ui-checkbox { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 13px; }
+.ui-kit-page { min-height: 100vh; padding: 32px; }
+.ui-kit-shell { max-width: 1120px; margin: auto; }
+.ui-kit-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 48px; font-weight: 750; }
+.ui-kit-brand .ui-button { margin-left: auto; }
+.ui-kit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.ui-kit-row { display: flex; flex-wrap: wrap; gap: 10px; margin-block: 16px; }
+.ui-swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+.ui-swatches span { display: block; height: 52px; border: 1px solid var(--ui-line); border-radius: 8px; margin-bottom: 8px; }
+
+/* One workspace shell, including provider and account detail screens. */
+.privacy-workspace { --privacy-sidebar-width: 240px; background: var(--ui-canvas); }
+.privacy-sidebar { padding: 28px 16px 20px; background: #172026; border-right: 0; }
+.privacy-brand { display: inline-flex; align-items: center; gap: 12px; color: #fff; font-size: 20px; }
+.privacy-sidebar-brand-row { margin-bottom: 28px; padding-inline: 12px; }
+.privacy-nav-group p { color: #99a8ad; font-size: 10px; }
+.privacy-nav-group a { gap: 12px; color: #bbc7c9; font-size: 13px; font-weight: 550; border-radius: 8px; }
+.privacy-nav-group a.active { color: #e6f9d3; background: #b9f66b14; box-shadow: inset 3px 0 var(--ui-accent); }
+.privacy-nav-group a:hover { color: white; background: #ffffff0d; }
+.ui-nav-icon { display: grid; width: 20px; flex: 0 0 auto; place-items: center; }
+.ui-nav-icon svg { width: 18px; height: 18px; }
+.privacy-more-tools summary { color: #bbc7c9; font-size: 13px; }
+.privacy-sidebar-account { border-color: #ffffff1f; margin-top: auto; padding-top: 24px; }
+.privacy-sidebar-account strong { color: white; font-size: 13px; }
+.privacy-sidebar-account small { color: #a6b6b9; font-size: 11px; }
+.privacy-sidebar-account > span, .privacy-mobile-header > span { background: var(--ui-accent); color: var(--ui-ink); }
+.privacy-sign-out, .privacy-sidebar-close { color: #bbc7c9; font-size: 13px; }
+.privacy-mobile-header { background: var(--ui-surface); color: var(--ui-ink); }
+.privacy-mobile-header button { color: var(--ui-ink); font-size: 13px; }
+.privacy-workspace :is(.privacy-page, .accounts-page, .cleanup-page, .identity-page, .settings-page, .google-page) { min-height: calc(100svh - 64px); padding: 40px clamp(20px, 4vw, 48px) 64px; background: transparent; }
+:is(.privacy-page-shell, .accounts-shell, .cleanup-shell, .identity-shell, .settings-shell, .google-shell) { width: min(100%, 1120px); margin-inline: auto; }
+.privacy-workspace .google-header { min-height: 36px; margin-bottom: 24px; }
+.privacy-workspace .google-header a { color: var(--ui-muted); font-size: 13px; }
+.privacy-workspace .google-header .google-brand { font-size: 13px; font-weight: 600; }
+.privacy-workspace h2 { font-size: 20px; line-height: 1.3; letter-spacing: -.025em; }
+.privacy-workspace h3 { font-size: 17px; line-height: 1.4; }
+.privacy-workspace .account-detail-hero { padding-block: 24px 32px; }
+.privacy-workspace :is(.account-detail-hero h1, .accounts-error-state h1) { font-size: clamp(28px, 4vw, 38px); line-height: 1.2; }
+:is(.privacy-card, .accounts-workspace, .account-evidence-panel, .account-insight-panel, .cleanup-workspace, .identity-map, .identity-relationships, .settings-data-card, .settings-danger-card, .google-connection-card, .google-sync-panel, .google-capability-grid article, .account-card, .cleanup-card) { border: 1px solid var(--ui-line); border-radius: var(--ui-radius); background: var(--ui-surface); box-shadow: var(--shadow-card); }
+.privacy-workspace :is(.accounts-workspace, .cleanup-workspace, .identity-map, .identity-relationships, .settings-data-card, .settings-danger-card, .google-connection-card, .google-sync-panel) { padding: 24px; }
+.privacy-workspace :is(.accounts-summary, .cleanup-summary, .identity-summary, .account-detail-grid, .privacy-metric) { background: white; box-shadow: none; border: 1px solid var(--ui-line); border-radius: var(--ui-radius); }
+.privacy-workspace :is(.accounts-summary, .cleanup-summary, .identity-summary) { margin-bottom: 24px; }
+.privacy-workspace :is(.accounts-summary dd, .cleanup-summary dd, .identity-summary dd, .privacy-metric strong) { font-size: 28px; font-weight: 650; }
+.privacy-workspace :is(.accounts-summary dt, .cleanup-summary dt, .identity-summary dt, .privacy-metric span) { font-size: 12px; }
+.privacy-workspace :is(.privacy-card-label, .accounts-eyebrow, .cleanup-eyebrow, .identity-eyebrow, .settings-eyebrow, .google-eyebrow, .google-card-kicker) { color: #52704d; font-size: 11px; }
+.privacy-workspace :is(.privacy-list-item p, .privacy-list-item small, .privacy-card p, .google-capability-grid p, .google-connection-card p, .cleanup-card > p) { font-size: 14px; line-height: 1.65; }
+.privacy-workspace .privacy-list-item { padding-block: 20px; }
+.privacy-workspace :is(.accounts-workspace, .cleanup-workspace) { margin-bottom: 24px; }
+.privacy-workspace .dashboard-next-step { background: #eaf5de; border-color: #cddfbd; }
+.privacy-workspace .settings-danger-card { border-color: #e9c5bd; margin-top: 24px; }
+.privacy-workspace .privacy-score { color: var(--ui-ink); border-color: #d5e6c9; }
+
+/* Shared native controls keep the existing labels and application behavior. */
+:is(.privacy-workspace, .auth-page, .onboarding-page, .ui-kit-page) :is(input:not([type='checkbox']):not([type='radio']), select, textarea) { min-height: 44px; width: 100%; padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: 8px; background: white; color: var(--ui-ink); font: inherit; font-size: 14px; box-shadow: none; }
+:is(.privacy-workspace, .auth-page, .onboarding-page, .ui-kit-page) :is(input, select, textarea)::placeholder { color: #66726d; opacity: 1; }
+:is(.privacy-workspace, .auth-page, .onboarding-page, .ui-kit-page) input[type='checkbox'] { accent-color: #326b22; flex: 0 0 auto; }
+:is(.privacy-workspace, .auth-page, .onboarding-page) input[aria-invalid='true'] { border-color: var(--ui-danger); }
+.privacy-workspace :is(.accounts-controls, .cleanup-filters) { gap: 16px; margin-block: 24px; }
+.privacy-workspace :is(label, .accounts-controls label > span, .cleanup-filters label > span, .privacy-form label) { font-size: 13px; }
+:is(.privacy-workspace, .auth-page, .onboarding-page) :is(.privacy-action, .privacy-pagination button, .privacy-form button, .accounts-pagination button, .accounts-empty a, .accounts-empty button, .cleanup-card-actions button, .cleanup-state button, .cleanup-pagination button, .google-actions a, .google-actions button, .google-sync-actions button, .google-account-link, .auth-submit, .onboarding-actions button) { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; gap: 8px; padding: 10px 16px; border: 1px solid var(--color-border-strong); border-radius: 8px; background: white; color: var(--ui-ink); font-size: 14px; font-weight: 650; line-height: 1.3; text-decoration: none; box-shadow: none; cursor: pointer; }
+:is(.privacy-workspace, .auth-page, .onboarding-page) :is(.privacy-action.is-primary, .privacy-form button, .google-primary-action, .auth-submit, .onboarding-actions button:last-child) { background: var(--ui-ink); border-color: var(--ui-ink); color: white; }
+.privacy-workspace .settings-delete-form button { min-height: 44px; border: 1px solid #e7beb8; border-radius: 8px; background: #fff2ef; color: var(--ui-danger); box-shadow: none; font-size: 14px; }
+:is(.privacy-workspace, .auth-page, .onboarding-page) button:disabled { opacity: .45; cursor: not-allowed; }
+.privacy-workspace :is(.accounts-loading, .accounts-empty, .cleanup-state, .identity-state) { min-height: 160px; padding: 32px; border: 1px dashed var(--ui-line); border-radius: var(--ui-radius); background: #f8f9f6; box-shadow: none; }
+:is(.google-notice, .accounts-notice, .cleanup-notice, .settings-error, .auth-form-error) { color: var(--ui-danger); background: #fff2ef; }
+.google-notice.is-success, .auth-account-deleted { color: #326b22; background: #edf6e6; }
+.privacy-note { border-color: #aec7a0; background: #edf6e6; }
+.privacy-workspace :is(.privacy-status.is-high, .cleanup-priority.is-high) { color: var(--ui-danger); }
+.privacy-workspace :is(.privacy-status.is-medium, .cleanup-priority.is-medium) { color: var(--color-warning); }
+
+/* Public screens share the same typography, surfaces, and form treatment. */
+.auth-page, .onboarding-page, .legal-shell { background: var(--ui-canvas); }
+.auth-main { max-width: 1040px; gap: 72px; }
+.auth-introduction h1 { font-size: clamp(32px, 4.5vw, 52px); line-height: 1.08; }
+.auth-card { background: white; border: 1px solid var(--ui-line); border-radius: 18px; box-shadow: var(--shadow-card); }
+.auth-principles li { font-size: 13px; }
+.auth-principles li > span { color: #326b22; }
+.auth-brand-mark { background: var(--ui-accent); box-shadow: none; }
+.auth-field label { font-size: 13px; }
+.auth-field-error, .auth-field-hint { font-size: 12px; }
+.onboarding-content { gap: 48px; }
+.onboarding-copy h1 { font-size: clamp(30px, 4vw, 46px); line-height: 1.12; }
+.onboarding-principles li { background: white; border: 1px solid var(--ui-line); box-shadow: none; border-radius: var(--ui-radius); }
+.onboarding-progress { background: #dce5d5; }
+.onboarding-progress > span { background: #326b22; }
+.legal-brand { color: var(--ui-ink); }
+.legal-intro h1 { font-size: clamp(32px, 5vw, 48px); }
+.legal-main aside { color: var(--color-warning); background: #fff6dc; }
+@media (max-width: 64rem) { .auth-main { gap: 32px; } }
+@media (max-width: 48rem) {
+  .privacy-workspace :is(.privacy-page, .accounts-page, .cleanup-page, .identity-page, .settings-page, .google-page) { padding: 28px 20px 48px; }
+  .ui-page-header { flex-direction: column; gap: 16px; margin-bottom: 24px; }
+  .ui-kit-page { padding: 24px 20px; }
+  .ui-kit-grid { grid-template-columns: 1fr; }
+  .ui-swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .privacy-workspace .settings-data-card { grid-template-columns: 1fr; gap: 16px; }
+  .ui-card, .privacy-workspace :is(.accounts-workspace, .cleanup-workspace, .identity-map, .identity-relationships, .settings-data-card, .settings-danger-card, .google-connection-card, .google-sync-panel) { padding: 20px; }
+  .ui-feedback { align-items: flex-start; padding: 20px; }
+  .privacy-workspace .privacy-list-item { grid-template-columns: 1fr; }
+  .privacy-workspace .privacy-actions { justify-content: flex-start; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ui-spinner { animation: none; } }

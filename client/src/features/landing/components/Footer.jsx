@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 function Footer() {
   return (
     <footer className="landing-footer">
@@ -19,13 +21,18 @@ function Footer() {
           </div>
           <div>
             <h2>Project</h2>
-            <a href="https://github.com/Anas2694/owntrace">GitHub</a>
+            <a href="https://github.com/RaphaelBlaster/owntrace">GitHub</a>
             <a href="#development-status">Development status</a>
+          </div>
+          <div>
+            <h2>Legal</h2>
+            <Link to="/privacy-policy">Privacy Policy</Link>
+            <Link to="/terms">Terms</Link>
           </div>
         </nav>
       </div>
       <div className="landing-container footer-bottom">
-        <p>© {new Date().getFullYear()} OwnTrace. Built openly by Anas and Raphael.</p>
+        <p>© {new Date().getFullYear()} OwnTrace. Built openly by the OwnTrace team.</p>
         <p>Public project · No private contact details published</p>
       </div>
     </footer>
