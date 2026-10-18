@@ -17,7 +17,7 @@ function FinalCTA() {
               Get Started
               <Icon name="arrow" className="button-icon" />
             </Link>
-            <a className="button button-secondary" href="https://github.com/Anas2694/owntrace">
+            <a className="button button-secondary" href="https://github.com/RaphaelBlaster/owntrace">
               Follow development
               <Icon name="arrow" className="button-icon" />
             </a>

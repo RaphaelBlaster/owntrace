@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/lucide-icons/lucide",
+  "commit": "a04f228cd01185e09c188b7227b9600c08c565ec",
+  "icons": [
+    "copy",
+    "rotate-ccw",
+    "pencil",
+    "square-pen",
+    "panel-left",
+    "panel-left-close",
+    "user-round",
+    "plus",
+    "chevron-down",
+    "check",
+    "ellipsis",
+    "x",
+    "arrow-up",
+    "square"
+  ]
+}

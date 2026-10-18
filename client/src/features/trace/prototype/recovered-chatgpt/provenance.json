@@ -1,0 +1,80 @@
+{
+  "sourceUrl": "https://chatgpt.com/",
+  "retrievedAt": "2026-10-05T21:48:46.767Z",
+  "viewport": {
+    "dpr": 2,
+    "height": 718,
+    "width": 1280
+  },
+  "sourcePillSize": {
+    "height": 52,
+    "width": 768
+  },
+  "classification": "Recovered rendered HTML, inline SVGs, resolved CSS, and serialized source CSSOM",
+  "representationChanges": [
+    "Original HTML retained separately; scoped copy adds data-snapshot-node attributes only.",
+    "Resolved computed CSS flattened into per-node selectors; original CSSOM stylesheet snapshots retained.",
+    "A new custom-element adapter scales and positions the captured pill."
+  ],
+  "runtimeLimit": "Original React event handlers, model selection, attachments, dictation and voice services are not part of this visual snapshot.",
+  "sourceStylesheets": [
+    {
+      "representation": "CSSOM serialization of page-delivered stylesheet",
+      "url": "https://chatgpt.com/cdn/assets/886701.90b940c19f.css"
+    },
+    {
+      "representation": "CSSOM serialization of page-delivered stylesheet",
+      "url": "https://chatgpt.com/cdn/assets/async/823048.411926d8f9.css"
+    },
+    {
+      "representation": "CSSOM serialization of page-delivered stylesheet",
+      "url": "https://chatgpt.com/cdn/assets/async/848296.caffcf9afd.css"
+    },
+    {
+      "representation": "CSSOM serialization of page-delivered stylesheet",
+      "url": "https://chatgpt.com/cdn/assets/async/245910.9741e8475a.css"
+    }
+  ],
+  "files": [
+    {
+      "name": "245910.9741e8475a.css",
+      "sha256": "e2c33f2adc290cd3290ab3acf5058be7f33eea97d41dfbda72fde6e7de2c12ce"
+    },
+    {
+      "name": "823048.411926d8f9.css",
+      "sha256": "857beff59891a579b962fcdb412da5f9359d64ba84267640468d27265503ceb1"
+    },
+    {
+      "name": "848296.caffcf9afd.css",
+      "sha256": "2be8e93589be3d52ff099f3510de86d3b3dcea05c3b83932bae474b3284718c4"
+    },
+    {
+      "name": "886701.90b940c19f.css",
+      "sha256": "312dbf4bc98f53044242dc0541eaef659df1032da3c5548ab4ba5d3e15f54a4b"
+    },
+    {
+      "name": "composer.original.html",
+      "sha256": "cc88da72dae158951e7fa899a0cdacd57258a196c2661b41756ed115428fbeb3"
+    },
+    {
+      "name": "composer.reference.png",
+      "sha256": "c4f2f3fcaa5b455ab9d454a198feed39ef2901d0d5de22cd02c0f1bce343c93e"
+    },
+    {
+      "name": "composer.resolved.css",
+      "sha256": "71de0e7c9b9b76ee591c16714fecfdea164c2d88fd76ecd62eecbe087b2518c5"
+    },
+    {
+      "name": "composer.scoped.html",
+      "sha256": "fa58557248a304040239d1806609cd1358580501f0bb1d0415e804c40a89b8db"
+    },
+    {
+      "name": "composer.snapshot.json",
+      "sha256": "2373b8d3b46e895be57136ceb1c5e0b160a0063f30fe7c66f66e9fe64a460c5b"
+    },
+    {
+      "name": "composer.source-css.json",
+      "sha256": "cd5ac1eb53f15c4788e7bce3ec05264ec6202dedc1daaf6bcf1eddef334d5782"
+    }
+  ]
+}

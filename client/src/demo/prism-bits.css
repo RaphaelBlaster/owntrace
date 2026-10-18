@@ -1,0 +1,163 @@
+/* Prism / React Bits: crisp product surfaces around an interactive footprint. */
+.dx-design-scope { --dx-bg: #f5f7fa; --dx-line: #e2e8ef; --dx-radius: 18px; }
+.dx-sidebar { width: 232px; background: #101c26; padding-top: 24px; }
+.dx-frame { margin-left: 232px; }
+.dx-main { padding: 32px 36px 25px; max-width: 1560px; }
+.dx-topbar { padding-inline: 36px; }
+.dx-nav-group a { min-height: 45px; font-size: 13px; }
+.dx-nav-group a.active { background: #223946; color: #8ee5f8; box-shadow: inset 3px 0 #55d4f2; }
+.dx-workspace-switch { background: #1a2a36; border-color: #2d3d49; }
+.dx-screen-header h1 { font-size: clamp(27px,2.2vw,34px); letter-spacing: -1.35px; }
+.dx-screen-header .dx-kicker { font-size: 10px; }
+.dx-description { font-size: 14px; }
+.dx-panel { box-shadow: 0 3px 10px #172b3e03; }
+.ot-overview .dx-screen-header { margin-bottom: 25px; }
+.ot-top-grid { display: grid; grid-template-columns: minmax(0,1.75fr) minmax(300px,1fr); gap: 22px; margin-bottom: 22px; }
+.ot-top-grid > *, .ot-work-grid > *, .ot-metrics > * { min-width: 0; }
+.ot-footprint.card-spotlight { background: #152735; border-color: #273f50; border-radius: 20px; padding: 23px 26px 0; color: #fff; box-shadow: 0 12px 26px #1e3c4910; }
+.ot-footprint-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; color: #abc2ce; font-size: 10px; }
+.ot-footprint-heading > span { display: flex; align-items: center; gap: 7px; }
+.ot-footprint-heading > span:first-child { font-size: 9px; letter-spacing: 1.5px; font-weight: 800; color: #8de0f1; }
+.ot-footprint-heading i { width: 5px; height: 5px; border-radius: 50%; background: #b9f66b; }
+.ot-footprint-body { display: grid; grid-template-columns: 1fr 1.08fr; align-items: center; min-height: 275px; gap: 10px; }
+.ot-footprint-copy { padding: 23px 0; position: relative; z-index: 1; }
+.ot-footprint-copy h2 { font-size: clamp(24px,2.3vw,33px); line-height: 1.18; letter-spacing: -1.2px; font-weight: 700; margin: 0 0 18px; }
+.ot-footprint-copy h2 em { color: #8de0f1; font-style: normal; }
+.ot-footprint-copy p { font-size: 14px; line-height: 1.7; color: #adc3d0; max-width: 250px; margin: 0 0 22px; }
+.ot-source-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.ot-source-chips > a { display: flex; align-items: center; gap: 7px; border: 1px solid #3a5262; background: #1d3444; padding: 6px 8px; border-radius: 8px; font-size: 10px; color: #deedf5; }
+.ot-source-chips .dx-provider-icon { width: 20px; height: 20px; border-radius: 5px; }
+.ot-source-chips i { width: 5px; height: 5px; border-radius: 50%; background: #8296a1; }
+.ot-source-chips i.connected { background: #b9f66b; }
+.ot-footprint-copy > small { color: #a3bdcd; font-size: 11px; }
+.ot-account-map { position: relative; width: 100%; aspect-ratio: 1; max-height: 300px; min-width: 0; }
+.ot-map-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ot-map-lines circle { fill: none; stroke: #466477; stroke-width: .2; stroke-dasharray: .6 1.5; }
+.ot-map-lines circle:first-child { stroke-dasharray: none; stroke: #314b5d; }
+.ot-map-lines path { stroke: #4d6e82; stroke-width: .25; }
+.ot-map-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; justify-content: center; width: 91px; height: 91px; border: 1px solid #4a7588; border-radius: 50%; background: #203b4d; box-shadow: 0 0 35px #55d4f212; }
+.ot-map-center .dx-mark { width: 22px; height: 22px; margin-top: -6px; }
+.ot-map-center strong { font-size: 25px; line-height: 1.2; letter-spacing: -1px; }
+.ot-map-center > span:last-child { font-size: 8px; color: #aac8d8; margin-top: 2px; }
+.dx-app .ot-map-node { position: absolute; z-index: 1; transform: translate(-50%,-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; border: 0; padding: 0; background: none; color: #b8cedb; font-size: 8px; }
+.ot-map-node .dx-service-icon { width: 36px; height: 36px; border-radius: 11px; background: #f4fafc; border-color: #b7d2df; box-shadow: 0 3px 10px #08121b50; transition: transform .2s ease, box-shadow .2s ease; }
+.ot-map-node .dx-service-icon .dx-brand-svg { width: 60%; height: 60%; }
+.ot-map-node:hover .dx-service-icon, .ot-map-node.selected .dx-service-icon { transform: translateY(-3px); border-color: #55d4f2; box-shadow: 0 0 0 4px #55d4f21b, 0 6px 12px #08121b50; }
+.ot-map-node i { position: absolute; top: -3px; right: 3px; width: 7px; height: 7px; border: 2px solid #152735; border-radius: 50%; background: #ffba79; }
+.ot-map-selection { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 15px; border-top: 1px solid #344a5b; padding: 16px 0; }
+.ot-map-selection > div { display: flex; gap: 10px; align-items: center; }
+.ot-map-selection .dx-service-icon { width: 30px; height: 30px; border-radius: 8px; }
+.ot-map-selection strong { display: block; font-size: 13px; }
+.ot-map-selection small { display: block; font-size: 11px; color: #b0c7d5; margin-top: 3px; }
+.ot-map-selection > a { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 750; color: #9ee5f5; white-space: nowrap; }
+.ot-next-step.card-spotlight { display: flex; flex-direction: column; padding: 25px; background: #fff; border: 1px solid #dce7ed; border-radius: 20px; box-shadow: 0 4px 16px #1d394908; }
+.ot-next-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 25px; }
+.ot-next-heading > span { display: flex; gap: 6px; align-items: center; font-size: 9px; font-weight: 800; letter-spacing: 1.1px; color: #40879d; }
+.ot-next-service { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.ot-next-service .dx-service-icon { width: 38px; height: 38px; border-radius: 11px; }
+.ot-next-service > span:nth-child(2) { flex: 1; }
+.ot-next-service strong { display: block; font-size: 12px; }
+.ot-next-service small { display: block; font-size: 10px; color: #7c8a96; margin-top: 3px; }
+.ot-next-step h2 { font-size: 21px; font-weight: 800; letter-spacing: -.65px; line-height: 1.35; margin: 0 0 10px; }
+.ot-next-step > p { font-size: 14px; line-height: 1.7; color: #607381; margin-bottom: 24px; }
+.ot-review-progress { margin-top: auto; margin-bottom: 19px; }
+.ot-review-progress > div:first-child { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 10px; color: #7c8a96; }
+.ot-review-progress b { font-weight: 700; color: #415b6b; }
+.ot-review-track { height: 4px; border-radius: 5px; background: #edf2f6; overflow: hidden; }
+.ot-review-track > span { display: block; height: 100%; background: #55d4f2; transition: width .35s ease; }
+.ot-next-step .dx-button { width: 100%; background: #142e3e; border-color: #142e3e; color: #fff !important; position: relative; }
+.ot-next-step .dx-button:hover { background: #21485d; }
+.ot-next-note { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 11px; font-size: 9px; color: #83949f; }
+.ot-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin-bottom: 26px; }
+.ot-metric-card.card-spotlight { padding: 0; border: 1px solid #e2e8ee; border-radius: 15px; background: #fff; box-shadow: 0 3px 10px #172b3e03; }
+.ot-metric-card > a { display: block; padding: 20px; position: relative; }
+.ot-metric-label { display: flex; gap: 8px; align-items: center; color: #536d7e; font-size: 12px; font-weight: 600; }
+.ot-metric-label > svg:last-child { margin-left: auto; color: #93a7b4; width: 12px; }
+.ot-metric-card strong { display: block; font-size: 31px; font-weight: 750; letter-spacing: -1.1px; margin-top: 16px; font-variant-numeric: tabular-nums; }
+.ot-metric-card strong span { display: inline; }
+.ot-metric-card p { color: #697f8d; font-size: 12px; margin: 4px 0 17px; }
+.ot-metric-foot { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #607989; border-top: 1px solid #eef2f5; padding-top: 11px; }
+.ot-metric-foot i { width: 5px; height: 5px; border-radius: 50%; background: #5eabc3; }
+.ot-metric-foot.amber i { background: #e7ab61; }.ot-metric-foot.red i { background: #da7777; }
+.ot-work-grid { display: grid; grid-template-columns: minmax(0,1.65fr) minmax(0,1fr); gap: 22px; margin-bottom: 25px; }
+.ot-inventory.dx-panel, .ot-renewals.dx-panel { padding: 24px; }
+.ot-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
+.ot-eyebrow { display: flex; align-items: center; gap: 6px; color: #6793a5; font-size: 9px; font-weight: 800; letter-spacing: 1.1px; margin-bottom: 9px; }
+.ot-panel-heading h2 { margin: 0; font-size: 18px; font-weight: 750; letter-spacing: -.55px; }
+.ot-panel-heading p { margin: 7px 0 0; font-size: 13px; color: #69808f; }
+.ot-panel-heading > a { display: flex; gap: 6px; align-items: center; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.ot-inventory-head { display: grid; grid-template-columns: 1.8fr 1fr 1fr; gap: 12px; padding: 0 20px 12px 0; border-bottom: 1px solid #e9eff4; color: #8b9ba7; font-size: 8px; letter-spacing: 1px; }
+.ot-inventory-rows > a { display: grid; grid-template-columns: minmax(0,1.8fr) minmax(0,1fr) minmax(0,1fr) 12px; gap: 12px; align-items: center; padding: 19px 0; border-bottom: 1px solid #edf1f5; }
+.ot-inventory-rows > a:hover { background: #f8fcfe; }
+.ot-inventory-rows .dx-service-icon { width: 36px; height: 36px; border-radius: 10px; }
+.ot-inventory-rows .dx-brand-svg { width: 65%; height: 65%; }
+.ot-inventory-rows .dx-account-name strong { font-size: 14px; }.ot-inventory-rows .dx-account-name span { font-size: 11px; color: #647e8e; }
+.ot-row-evidence strong { display: block; color: #517182; font-size: 12px; font-weight: 600; }.ot-row-evidence > span { display: block; color: #6d8391; font-size: 11px; margin-top: 4px; }
+.ot-inventory-rows .dx-tag { justify-self: start; white-space: nowrap; font-size: 9px; }
+.ot-inventory-rows > a > svg { color: #8fa4b1; }
+.ot-inventory-foot { display: flex; align-items: flex-start; gap: 7px; color: #6c8392; font-size: 11px; line-height: 1.7; margin-top: 20px; }
+.ot-inventory-foot svg { flex-shrink: 0; margin-top: 1px; }
+.ot-right-stack { display: flex; flex-direction: column; gap: 18px; }
+.ot-renewals .ot-panel-heading { margin-bottom: 8px; }
+.ot-renewal-items > a { display: flex; align-items: center; gap: 11px; min-height: 70px; border-bottom: 1px solid #edf1f5; }
+.ot-date { width: 34px; flex-shrink: 0; text-align: center; }.ot-date small { display: block; font-size: 8px; color: #8c9ba5; }.ot-date strong { font-size: 22px; line-height: 1.25; }
+.ot-renewal-items .dx-service-icon { width: 30px; height: 30px; border-radius: 8px; }
+.ot-renewal-items > a > span:nth-last-child(2) { flex: 1; }
+.ot-renewal-items > a > span:nth-last-child(2) strong { display: block; font-size: 13px; }.ot-renewal-items > a > span:nth-last-child(2) small { display: block; font-size: 11px; color: #6d8391; margin-top: 3px; }
+.ot-renewal-items > a > b { font-size: 12px; font-variant-numeric: tabular-nums; }
+.ot-text-link { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 16px; font-size: 10px; font-weight: 650; color: #507c91 !important; }
+.ot-clarity-card.card-spotlight { padding: 23px; border: 1px solid #dce9ef; border-radius: 18px; background: #eaf4f8; }
+.ot-clarity-card > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ot-clarity-card strong { font-size: 37px; letter-spacing: -1.3px; font-weight: 700; color: #24485e; }.ot-clarity-card strong small { font-size: 12px; color: #7c9bab; margin-left: 4px; letter-spacing: 0; }
+.ot-clarity-card .dx-tag { background: #fff8; border-color: #cfe2ec; }
+.ot-clarity-card p { color: #5b7d90; font-size: 13px; line-height: 1.7; margin: 8px 0 15px; }
+.ot-clarity-card a { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 700; color: #326b84; }
+.ot-bottom-note { display: flex; justify-content: space-between; gap: 15px; align-items: center; color: #7f939f; font-size: 10px; }
+.ot-bottom-note > span, .ot-bottom-note > a { display: flex; align-items: center; gap: 8px; }.ot-bottom-note > a { color: #4a768c; }
+.ot-command-trigger { display: flex; align-items: center; gap: 10px; padding: 9px 12px; width: 320px; cursor: pointer; color: #6d8391; font-family: inherit; font-size: 12px; }
+.ot-command-trigger span { flex: 1; text-align: left; white-space: nowrap; }.ot-command-trigger kbd { flex-shrink: 0; font-family: inherit; font-size: 9px; background: #fff; padding: 3px 5px; border: 1px solid #e2e8ef; border-radius: 4px; }
+.ot-command-input { display: flex; gap: 10px; align-items: center; padding: 13px 0; border-bottom: 1px solid #e1e9ef; }
+.ot-command-input input { border: 0; background: transparent; width: 100%; font-size: 14px; outline: none; }
+.ot-command-results { display: grid; gap: 5px; margin: 16px 0; max-height: 340px; overflow-y: auto; }
+.ot-command-results > button { display: flex; align-items: center; gap: 12px; padding: 12px; background: #fff; color: #304c5c; border: 1px solid transparent; border-radius: 10px; text-align: left; font-family: inherit; }
+.ot-command-results > button.selected { background: #eef8fc; border-color: #cee8f2; }
+.ot-command-results > button > span { flex: 1; }.ot-command-results strong { display: block; font-size: 13px; }.ot-command-results small { display: block; font-size: 10px; color: #8397a3; margin-top: 3px; }
+.ot-command-empty { padding: 30px 10px; text-align: center; color: #7b919f; font-size: 13px; }
+.ot-command-hint { display: flex; gap: 16px; color: #8197a4; font-size: 10px; border-top: 1px solid #e1e9ef; padding-top: 15px; }
+.ot-command-hint kbd { font: inherit; color: #415f71; }
+@media (max-width: 1200px) {
+  .ot-top-grid { grid-template-columns: minmax(0,1.45fr) minmax(280px,1fr); }
+  .ot-footprint.card-spotlight { padding-inline: 20px; }
+  .ot-footprint-body { grid-template-columns: 1fr; }.ot-footprint-copy { padding-bottom: 5px; }
+  .ot-footprint-copy h2 { font-size: 28px; }.ot-footprint-copy h2 br { display: none; }
+  .ot-footprint-copy p { max-width: none; margin-bottom: 13px; }
+  .ot-source-chips { margin-bottom: 0; }.ot-footprint-copy > small { display: none; }
+  .ot-account-map { max-width: 240px; max-height: 240px; margin: 0 auto 12px; }
+  .ot-next-step { justify-content: center; }
+  .ot-metric-card > a { padding: 17px; }.ot-metric-label { font-size: 10px; gap: 5px; }
+  .ot-work-grid { grid-template-columns: 1fr; }.ot-right-stack { display: grid; grid-template-columns: 1.3fr 1fr; }
+}
+@media (max-width: 800px) {
+  .dx-sidebar { display: none; }.dx-frame { margin-left: 0; }.dx-main { padding: 25px 20px; }.dx-topbar { padding-inline: 20px; }
+  .ot-top-grid { grid-template-columns: minmax(0,1.4fr) minmax(250px,1fr); }
+  .ot-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 600px) {
+  .dx-main { padding: 24px 17px; }.ot-top-grid { grid-template-columns: 1fr; gap: 16px; }
+  .ot-footprint.card-spotlight { padding: 20px 21px 0; }.ot-footprint-heading { font-size: 9px; }
+  .ot-footprint-copy h2 { font-size: 28px; margin-bottom: 13px; }.ot-footprint-copy h2 br { display: block; }
+  .ot-account-map { max-width: 275px; max-height: 275px; margin-block: 14px; }
+  .ot-map-node > span { font-size: 9px; }.ot-map-node .dx-service-icon { width: 40px; height: 40px; }
+  .ot-map-selection small { max-width: 185px; line-height: 1.7; }.ot-map-selection > a { font-size: 11px; }
+  .ot-next-step.card-spotlight { padding: 22px; }.ot-next-heading { margin-bottom: 20px; }.ot-next-step h2 { font-size: 23px; }
+  .ot-next-step > p { font-size: 13px; }.ot-review-progress > div:first-child { font-size: 11px; }.ot-next-note { font-size: 10px; }
+  .ot-metrics { gap: 11px; }.ot-metric-card > a { padding: 17px 14px; }.ot-metric-label { font-size: 11px; line-height: 1.6; min-height: 36px; }
+  .ot-metric-label > svg:last-child { display: none; }.ot-metric-card strong { font-size: 29px; margin-top: 8px; }.ot-metric-card p { font-size: 12px; line-height: 1.6; min-height: 38px; margin-bottom: 12px; }.ot-metric-foot { font-size: 11px; line-height: 1.6; }
+  .ot-inventory.dx-panel, .ot-renewals.dx-panel { padding: 20px; }.ot-panel-heading { flex-wrap: wrap; gap: 12px; }
+  .ot-panel-heading h2 { font-size: 19px; }.ot-panel-heading p { font-size: 12px; }
+  .ot-inventory-head { display: none; }.ot-inventory-rows > a { grid-template-columns: 1fr auto 12px; gap: 7px; }
+  .ot-row-evidence { display: none; }.ot-inventory-rows .dx-account-name strong { font-size: 13px; }.ot-inventory-rows .dx-account-name span { font-size: 10px; }.ot-inventory-rows .dx-tag { font-size: 10px; padding-inline: 6px; }
+  .ot-right-stack { grid-template-columns: 1fr; }.ot-renewal-items > a > span:nth-last-child(2) strong { font-size: 12px; }.ot-renewal-items > a > span:nth-last-child(2) small { font-size: 10px; }.ot-text-link { font-size: 12px; }
+  .ot-bottom-note { flex-direction: column; align-items: flex-start; line-height: 1.8; }.ot-command-trigger { width: 34px; height: 34px; padding: 8px; display: flex; }.ot-command-trigger span,.ot-command-trigger kbd { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ot-map-node *, .ot-review-track > span { transition: none !important; }.card-spotlight::before { display: none; } }

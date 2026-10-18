@@ -9,12 +9,13 @@ import {
   getSessionCookieOptions,
 } from '../config/auth.js'
 
-function createSessionToken(userId) {
+function createSessionToken(userId, tokenId) {
   return jwt.sign({}, getJwtSecret(), {
     algorithm: 'HS256',
     audience: TOKEN_AUDIENCE,
     expiresIn: Math.floor(SESSION_DURATION_MS / 1000),
     issuer: TOKEN_ISSUER,
+    jwtid: tokenId,
     subject: userId.toString(),
   })
 }
