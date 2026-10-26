@@ -27,7 +27,7 @@ Local Vite proxies `/api` to Express on port 5000. Authentication uses a signed 
 5. Validate model structure and supporting evidence. Save derived cards with batched MongoDB writes; checkpoint only after successful persistence.
 6. Rank categories by recency, importance and required action. Only a bounded number of messages contribute to each category score, reducing newsletter-volume dominance. Marketing, spam, personal and review-only categories do not become top-ranked categories.
 
-Malformed model output has bounded retries/single-message recovery with validation retained. Transport errors remain failures rather than invented classifications. Failed scans retain their checkpoint for supported resumption. Stop, consent withdrawal and disconnect are checked before committing results.
+Malformed model output has bounded retries/single-message recovery with validation retained. Transport errors remain failures rather than invented classifications. Failed scans retain their checkpoint for supported resumption. While a refresh runs, reads include the previous completed run for the same user and connection, bounded to250 saved messages; once refresh completes, reads use only its run. Stop, consent withdrawal and disconnect are checked before committing results.
 
 Google Pub/Sub and Microsoft Graph notifications enqueue work. Notifications arriving during active work are coalesced into a follow-up. The worker checks persisted jobs; this polling is not a full mailbox scan each second. OAuth grants, callback configuration and provider access must remain valid. Body-enabled Top K notifications use its bounded flow rather than launching a legacy metadata scan in parallel.
 

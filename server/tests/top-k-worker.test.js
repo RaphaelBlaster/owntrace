@@ -84,6 +84,13 @@ async function enrichmentFixture() {
   return { ...fixtureData, card }
 }
 
+it('remembers the completed run when a notification starts the next refresh', async () => {
+  const { user, scan } = await fixture()
+  await MailAnalysis.updateOne({ _id: scan.id }, { $set: { status: 'COMPLETED', processed: 250 } })
+  await startTopKScan(user.id, 'gmail', { push: true, followUp: true })
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ previousRunId: 'worker-run', status: 'QUEUED', processed: 0 })
+})
+
 it('enriches only existing legacy job cards and preserves the completed scan checkpoint', async () => {
   const { scan, card } = await enrichmentFixture()
   await processMailEnrichmentPage(scan.id)

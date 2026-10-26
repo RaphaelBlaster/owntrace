@@ -10,7 +10,7 @@ import { intelligenceConfigured, sanitizeMailMetadata, sanitizeMailBody, gateMes
 import { logEvent } from '../utils/logger.js'
 import { ensureGmailPush } from './google-push.service.js'
 import { ensureMicrosoftPush } from './microsoft-push.service.js'
-import { groupMailInsights, paginateInsights } from './mail-insight-query.service.js'
+import { groupMailInsights, paginateInsights, visibleMailScope } from './mail-insight-query.service.js'
 
 const models = { gmail: GoogleConnection, outlook: MicrosoftConnection }
 const active = new Map()
@@ -46,7 +46,7 @@ export async function topKState(userId, k) {
     const connection = await Model.findOne({ userId })
     return { provider, connected: !!connection && ['CONNECTED', 'SYNCING'].includes(connection.status), bodyAccess: !!connection && canReadMailBody(provider, connection), oauthUrl: `/api/${provider === 'gmail' ? 'google' : 'microsoft'}/oauth/start?access=body` }
   }))
-  const rows = analysis?.runId ? await MailInsight.find({ userId, runId: analysis.runId }).sort({ occurredAt: -1 }).limit(250).lean() : []
+  const rows = analysis?.runId ? await MailInsight.find(visibleMailScope(userId, analysis)).sort({ occurredAt: -1 }).limit(250).lean() : []
   const items = rows.map(row => Object.fromEntries(['category','title','status','summary','occurredAt','actionRequired','importance','evidence','senderDomain','analyzedBy','companyName','companyDomain','roleName','applicationReference','referenceType','eventKind','enrichmentVersion','threadHash'].map(key => [key, row[key]]).concat([['id', String(row._id)]])))
   const ranked = rankCategories(items, k)
   ranked.categories = ranked.categories.map(category => {
@@ -88,9 +88,10 @@ export async function startTopKScan(userId, provider, { push = false, followUp =
   }
   if (push && !followUp && settings.updatedAt > new Date(Date.now() - 30000)) return
   const resume = settings.status === 'FAILED' && settings.provider === provider && String(settings.connectionId) === connection.id && settings.cursor && settings.processed < 250
+  const previousRunId = settings.provider === provider && String(settings.connectionId) === connection.id ? (settings.status === 'COMPLETED' ? settings.runId : settings.previousRunId) : null
   const result = await withStateLock(userId, () => {
     signal?.throwIfAborted()
-    return MailAnalysis.findOneAndUpdate({ _id: settings.id, enabled: true, status: settings.status, updatedAt: settings.updatedAt, enrichmentStatus: { $nin: ['QUEUED', 'RUNNING'] } }, { $set: { provider, connectionId: connection.id, runId: resume ? settings.runId : randomUUID(), cursor: resume ? settings.cursor : null, processed: resume ? settings.processed : 0, limit: 250, until: resume ? settings.until : new Date(), status: 'QUEUED', leaseId: null, leaseUntil: null, lastErrorCode: null, pushPending: false } }, { returnDocument: 'after' })
+    return MailAnalysis.findOneAndUpdate({ _id: settings.id, enabled: true, status: settings.status, updatedAt: settings.updatedAt, enrichmentStatus: { $nin: ['QUEUED', 'RUNNING'] } }, { $set: { provider, connectionId: connection.id, runId: resume ? settings.runId : randomUUID(), previousRunId, cursor: resume ? settings.cursor : null, processed: resume ? settings.processed : 0, limit: 250, until: resume ? settings.until : new Date(), status: 'QUEUED', leaseId: null, leaseUntil: null, lastErrorCode: null, pushPending: false } }, { returnDocument: 'after' })
   })
   if (!result) throw new AppError('Scan state changed. Refresh and retry.', 409, 'MAIL_SCAN_BUSY')
   if (!push) {

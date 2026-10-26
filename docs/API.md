@@ -146,6 +146,6 @@ These endpoints require the signed-in session. Responses are not publicly cachea
 | DELETE | `/api/top-k/scans/:provider` | Stop queued/active analysis without deleting saved results |
 | POST | `/api/top-k/enrichment` | Retry eligible legacy/invalid derived records within the bounded window; empty body |
 
-`kind` is `all`, `applications` or `opportunities`; page starts at1 and group limits are6,12or24. Counts and current/historical status distributions cover all matching saved groups before pagination. Messages and linked application groups are separate counts. The current scan run is not complete mailbox history.
+`kind` is `all`, `applications` or `opportunities`; page starts at1 and group limits are6,12or24. Counts and current/historical status distributions cover all matching saved groups before pagination. Messages and linked application groups are separate counts. Saved results from the previous completed run remain visible during a refresh for the same connection. Completion switches reads to the new run. Neither state establishes complete mailbox history.
 
 Body access is a separate OAuth upgrade using `/api/google/oauth/start?access=body` or `/api/microsoft/oauth/start?access=body`. Existing metadata-only grants are retained until the user approves broader read-only access. Enabling analysis also requires its OwnTrace consent. No attachments or mailbox changes are supported by this flow.

@@ -42,6 +42,7 @@ const analysisSchema = new mongoose.Schema({
   provider: { type: String, enum: ['gmail', 'outlook'] },
   connectionId: mongoose.Schema.Types.ObjectId,
   runId: String,
+  previousRunId: { type: String, default: null },
   status: { type: String, enum: ['IDLE', 'QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED'], default: 'IDLE' },
   processed: { type: Number, default: 0 },
   limit: { type: Number, default: 250 },

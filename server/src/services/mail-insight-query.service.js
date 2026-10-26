@@ -65,9 +65,14 @@ export function paginateInsights(groups, { status = '', search = '', kind = 'all
   return { insights: matches.slice((page - 1) * limit, page * limit), pagination: { page, limit, total: matches.length, pages: Math.ceil(matches.length / limit) }, counts: { messages: matches.reduce((sum, x) => sum + x.messageCount, 0), applications: matches.filter(x => x.kind === 'application' && x.match !== 'unresolved').length, applicationResults: matches.filter(x => x.kind === 'application').length, unresolved: matches.filter(x => x.match === 'unresolved' && x.category === 'jobs' && x.kind !== 'opportunity').reduce((sum, x) => sum + x.messageCount, 0), opportunities: matches.filter(x => x.kind === 'opportunity').length, currentStatuses, eventStatuses } }
 }
 
+export function visibleMailScope(userId, analysis) {
+  const runs = analysis.status !== 'COMPLETED' && analysis.previousRunId ? [analysis.runId, analysis.previousRunId] : [analysis.runId]
+  return { userId, runId: { $in: runs }, ...(analysis.connectionId ? { connectionId: analysis.connectionId } : {}) }
+}
+
 export async function queryMailInsights(userId, { category = 'jobs', status = '', search = '', page = 1, limit = 6, kind = category === 'jobs' ? 'applications' : 'all' } = {}) {
   const analysis = await MailAnalysis.findOne({ userId }).lean()
-  const rows = analysis?.runId ? await MailInsight.find({ userId, runId: analysis.runId, ...(category ? { category } : {}) }).sort({ occurredAt: -1 }).limit(250).lean() : []
+  const rows = analysis?.runId ? await MailInsight.find({ ...visibleMailScope(userId, analysis), ...(category ? { category } : {}) }).sort({ occurredAt: -1 }).limit(250).lean() : []
   const groups = groupMailInsights(rows)
   const result = paginateInsights(groups, { status, search, page, limit, kind })
   result.counts.enrichmentPending = rows.filter(row => row.category === 'jobs' && (row.enrichmentVersion || 0) < 2).length

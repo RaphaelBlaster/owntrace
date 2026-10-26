@@ -69,3 +69,20 @@ it('queries only the signed-in user and current run, with pending enrichment cov
   expect(result.counts).toMatchObject({ messages: 1, applications: 1, enrichmentPending: 1 })
   expect(result.scan).toMatchObject({ status: 'COMPLETED', processed: 250, enrichmentStatus: 'RUNNING', enrichmentProcessed: 50 })
 })
+
+it('keeps the previous saved results visible during refresh, then uses only the completed run', async () => {
+  const userId = new mongoose.Types.ObjectId(), connectionId = new mongoose.Types.ObjectId()
+  await MailAnalysis.create({ userId, connectionId, runId: 'refresh', previousRunId: 'saved', status: 'RUNNING', processed: 1 })
+  const base = { userId, provider: 'gmail', connectionId, fingerprint: 'test', analyzedBy: 'mercury', ...event(undefined) }
+  delete base._id
+  await MailInsight.create([
+    { ...base, runId: 'saved', messageHash: 'receipt', applicationReference: 'APP-1' },
+    { ...base, runId: 'refresh', messageHash: 'rejection', applicationReference: 'APP-1', status: 'rejected', occurredAt: new Date('2026-10-03') },
+    { ...base, runId: 'unrelated-old', messageHash: 'other', applicationReference: 'APP-2' },
+  ])
+  const refreshing = await queryMailInsights(userId)
+  expect(refreshing.counts.messages).toBe(2)
+  expect(refreshing.insights[0]).toMatchObject({ status: 'rejected', messageCount: 2 })
+  await MailAnalysis.updateOne({ userId }, { $set: { status: 'COMPLETED' } })
+  expect((await queryMailInsights(userId)).counts.messages).toBe(1)
+})

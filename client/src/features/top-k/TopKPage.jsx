@@ -286,6 +286,7 @@ export default function TopKPage() {
     </section>
 
     <section className="ot-top-k-single" aria-label="Selected category results">
+      {active ? <p role="status" className="ot-top-k-muted">Refreshing results. Saved findings stay visible while updates are processed.</p> : null}
       {!data ? <p role="status">Loading results…</p> : selectedCategory ? renderCategory(selectedCategory) : <EmptyResult title="No results yet" description="Enable analysis and scan a connected mailbox to get started." />}
     </section>
   </section>
