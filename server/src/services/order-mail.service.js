@@ -9,7 +9,7 @@ import AppError from '../utils/app-error.js'
 export function hashOrderValue(userId, provider, connectionId, value) {
   return crypto.createHmac('sha256', getTokenEncryptionKey()).update(`${userId}:${provider}:${connectionId}:${value}`).digest('base64url')
 }
-const fields = 'id,from,subject,receivedDateTime'
+const fields = 'id,from,subject,receivedDateTime,conversationId'
 export function orderGraphUrl(scan, size) {
   if (!scan.cursor) {
     const url = new URL('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages')
@@ -21,7 +21,7 @@ export function orderGraphUrl(scan, size) {
   }
   let url
   try { url = new URL(scan.cursor) } catch { throw new AppError('Invalid mailbox checkpoint.', 502, 'ORDER_CURSOR_INVALID') }
-  if (url.origin !== 'https://graph.microsoft.com' || url.username || url.password || url.hash || !['/v1.0/me/mailFolders/inbox/messages', "/v1.0/me/mailFolders('inbox')/messages"].includes(url.pathname) || url.searchParams.get('$select') !== fields || Number(url.searchParams.get('$top')) > 25 || !Number.isInteger(Number(url.searchParams.get('$top'))) || Number(url.searchParams.get('$top')) < 1) throw new AppError('Invalid mailbox checkpoint.', 502, 'ORDER_CURSOR_INVALID')
+  if (url.origin !== 'https://graph.microsoft.com' || url.username || url.password || url.hash || !['/v1.0/me/mailFolders/inbox/messages', "/v1.0/me/mailFolders('inbox')/messages"].includes(url.pathname) || ![fields, 'id,from,subject,receivedDateTime'].includes(url.searchParams.get('$select')) || Number(url.searchParams.get('$top')) > 25 || !Number.isInteger(Number(url.searchParams.get('$top'))) || Number(url.searchParams.get('$top')) < 1) throw new AppError('Invalid mailbox checkpoint.', 502, 'ORDER_CURSOR_INVALID')
   return url.href
 }
 export async function fetchOrderPage(scan, signal) {
@@ -34,7 +34,7 @@ export async function fetchOrderPage(scan, signal) {
     if (!Array.isArray(page.value) || page.value.length > size || (page['@odata.nextLink'] && (typeof page['@odata.nextLink'] !== 'string' || page['@odata.nextLink'].length > 8192))) throw new AppError('Invalid mailbox page.', 502, 'ORDER_MAIL_INVALID')
     const cursor = page['@odata.nextLink'] || null
     if (cursor) orderGraphUrl({ ...scan.toObject?.() || scan, cursor }, 25)
-    return { cursor, messages: page.value.map(message => ({ providerId: message.id, senderDomain: message.from?.emailAddress?.address?.split('@').at(-1), subject: message.subject, occurredAt: message.receivedDateTime })) }
+    return { cursor, messages: page.value.map(message => ({ providerId: message.id, threadId: message.conversationId, senderDomain: message.from?.emailAddress?.address?.split('@').at(-1), subject: message.subject, occurredAt: message.receivedDateTime })) }
   })
   return withGoogleClient(scan.userId, async ({ connection, oauthClient }) => {
     if (String(connection.id) !== String(scan.connectionId)) throw new AppError('Mailbox changed; start a new scan.', 409, 'ORDER_CONNECTION_CHANGED')
@@ -50,7 +50,7 @@ export async function fetchOrderPage(scan, signal) {
         const result = await gmail.users.messages.get({ userId: 'me', id: item.id, format: 'metadata', metadataHeaders: ['From', 'Subject', 'Date'] }, { signal, timeout: 15000 })
         const header = name => result.data.payload?.headers?.find(x => x.name?.toLowerCase() === name.toLowerCase())?.value
         const sender = header('From')?.match(/([a-z0-9.-]+\.[a-z]{2,})>?\s*$/i)?.[1]
-        messages.push({ providerId: item.id, senderDomain: sender, subject: header('Subject'), occurredAt: new Date(Number(result.data.internalDate) || Date.parse(header('Date'))).toISOString() })
+        messages.push({ providerId: item.id, threadId: result.data.threadId || item.threadId, senderDomain: sender, subject: header('Subject'), occurredAt: new Date(Number(result.data.internalDate) || Date.parse(header('Date'))).toISOString() })
       } catch (error) { if (error.response?.status === 404) messages.push({ providerId: item.id, deleted: true }); else throw error }
     }
     return { cursor: page.data.nextPageToken || null, messages }

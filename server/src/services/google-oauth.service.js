@@ -3,8 +3,10 @@ import jwt from 'jsonwebtoken'
 import { google } from 'googleapis'
 import {
   GMAIL_METADATA_SCOPE,
+  GMAIL_BODY_SCOPE,
   GOOGLE_OAUTH_DURATION_MS,
   GOOGLE_SCOPES,
+  GOOGLE_BODY_SCOPES,
   getGoogleConfig,
 } from '../config/google.js'
 import { TOKEN_AUDIENCE, TOKEN_ISSUER, getJwtSecret } from '../config/auth.js'
@@ -17,6 +19,8 @@ import { decryptSecret, encryptSecret } from '../utils/encryption.js'
 import { removeConnectionDiscoveries } from './account-discovery.service.js'
 import { removeSubscriptionsForUser } from './subscription-detection.service.js'
 import { cancelAndWaitForSync } from './gmail-sync.service.js'
+import { drainBufferedOrderWrites } from './order-write-buffer.service.js'
+import { stopGmailPush } from './google-push.service.js'
 
 const GOOGLE_STATE_AUDIENCE = `${TOKEN_AUDIENCE}:google-oauth`
 const GOOGLE_STATE_ISSUER = `${TOKEN_ISSUER}:google-oauth`
@@ -30,9 +34,9 @@ function hashState(value) {
   return crypto.createHash('sha256').update(value).digest('base64url')
 }
 
-function createOAuthState(userId) {
+function createOAuthState(userId, bodyAccess = false) {
   const requestState = crypto.randomBytes(32).toString('base64url')
-  const cookieState = jwt.sign({ stateHash: hashState(requestState) }, getJwtSecret(), {
+  const cookieState = jwt.sign({ stateHash: hashState(requestState), bodyAccess }, getJwtSecret(), {
     algorithm: 'HS256',
     audience: GOOGLE_STATE_AUDIENCE,
     expiresIn: Math.floor(GOOGLE_OAUTH_DURATION_MS / 1000),
@@ -59,12 +63,12 @@ function stateValuesMatch(first, second) {
   return firstBuffer.length === secondBuffer.length && crypto.timingSafeEqual(firstBuffer, secondBuffer)
 }
 
-function createAuthorizationUrl(userId) {
-  const { cookieState, requestState } = createOAuthState(userId)
+function createAuthorizationUrl(userId, { bodyAccess = false } = {}) {
+  const { cookieState, requestState } = createOAuthState(userId, bodyAccess)
   const authorizationUrl = createOAuthClient().generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
-    scope: GOOGLE_SCOPES,
+    scope: bodyAccess ? GOOGLE_BODY_SCOPES : GOOGLE_SCOPES,
     state: requestState,
   })
 
@@ -128,6 +132,9 @@ async function completeAuthorization({ code, cookieState, requestState, userId }
   }
 
   const grantedScopes = (tokens.scope || GOOGLE_SCOPES.join(' ')).split(/\s+/).filter(Boolean)
+  if (statePayload.bodyAccess && (!tokens.scope || !grantedScopes.includes(GMAIL_BODY_SCOPE))) {
+    throw new AppError('Google did not grant Gmail message access.', 409, 'GOOGLE_BODY_SCOPE_MISSING')
+  }
 
   if (!grantedScopes.includes(GMAIL_METADATA_SCOPE)) {
     throw new AppError(
@@ -168,7 +175,7 @@ async function completeAuthorization({ code, cookieState, requestState, userId }
     { $set: { onboardingStatus: 'SCAN_PENDING' } },
   )
 
-  return connection
+  return { connection, bodyAccess: Boolean(statePayload.bodyAccess) }
 }
 
 async function getConnectionForUser(userId, { includeSecrets = false } = {}) {
@@ -200,6 +207,9 @@ async function revokeGoogleAccessForUser(userId) {
   const connection = await getConnectionForUser(userId, { includeSecrets: true })
   if (!connection) return false
 
+  await stopGmailPush(userId)
+  const { stopTopK } = await import('./top-k.service.js')
+  await stopTopK(userId, 'gmail')
   await GoogleConnection.updateOne({ _id: connection.id, userId }, { $set: { status: 'DISCONNECTING' } })
   await cancelAndWaitForSync(userId)
   const { cancelOrderWork } = await import('./order-control.service.js')
@@ -212,6 +222,9 @@ async function disconnectGoogle(userId) {
   const connection = await getConnectionForUser(userId, { includeSecrets: true })
   if (!connection) return false
 
+  await stopGmailPush(userId)
+  const { stopTopK, removeTopKSource } = await import('./top-k.service.js')
+  await stopTopK(userId, 'gmail')
   await GoogleConnection.updateOne({ _id: connection.id, userId }, { $set: { status: 'DISCONNECTING' } })
   await cancelAndWaitForSync(userId)
   const { removeOrderSource } = await import('./order-control.service.js')
@@ -224,9 +237,12 @@ async function disconnectGoogle(userId) {
   }
 
   await Promise.all([
+    removeTopKSource(userId, 'gmail', connection.id),
     removeConnectionDiscoveries(userId, connection.id),
     removeSubscriptionsForUser(userId),
   ])
+  // Flush buffered writes first so a queued page cannot resurrect deleted data.
+  await drainBufferedOrderWrites()
   await Promise.all([
     GmailSignal.deleteMany({ connectionId: connection.id, userId }),
     GmailSyncJob.deleteMany({ connectionId: connection.id, userId }),

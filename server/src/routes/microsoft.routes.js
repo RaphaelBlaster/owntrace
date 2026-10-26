@@ -17,6 +17,7 @@ import { listMicrosoftSubscriptionsForUser } from '../services/microsoft-subscri
 import { cancelAndWaitForSync, getSyncJob, getSyncPolicy, processNextBatch, startSync } from '../services/microsoft-sync.service.js'
 import AppError from '../utils/app-error.js'
 import { logEvent } from '../utils/logger.js'
+import { ensureMicrosoftPush } from '../services/microsoft-push.service.js'
 
 const microsoftRouter = Router()
 microsoftRouter.use(requireAuth)
@@ -37,7 +38,7 @@ microsoftRouter.get('/connection', async (request, response) => {
 
 microsoftRouter.get('/oauth/start', (request, response, next) => {
   try {
-    const { authorizationUrl, cookieState } = createAuthorizationUrl(request.auth.userId)
+    const { authorizationUrl, cookieState } = createAuthorizationUrl(request.auth.userId, { bodyAccess: request.query.access === 'body' })
     response.cookie(MICROSOFT_OAUTH_COOKIE_NAME, cookieState, getMicrosoftOAuthCookieOptions())
     response.redirect(authorizationUrl)
   } catch (error) { next(configurationError(error)) }
@@ -50,8 +51,16 @@ microsoftRouter.get('/oauth/callback', async (request, response) => {
   if (request.query.error) return response.redirect(`${clientUrl}/connect/microsoft?microsoft=denied`)
   if (typeof request.query.code !== 'string' || typeof request.query.state !== 'string') return response.redirect(`${clientUrl}/connect/microsoft?microsoft=invalid_callback`)
   try {
-    await completeAuthorization({ code: request.query.code, cookieState, requestState: request.query.state, userId: request.auth.userId })
-    return response.redirect(`${clientUrl}/connect/microsoft?microsoft=connected`)
+    const authorization = await completeAuthorization({ code: request.query.code, cookieState, requestState: request.query.state, userId: request.auth.userId })
+    if (!authorization.bodyAccess) {
+      try { await ensureMicrosoftPush(request.auth.userId) }
+      catch { logEvent('warn', 'microsoft_push_setup_failed', { errorCode: 'MICROSOFT_PUSH_SETUP_FAILED' }) }
+    }
+    try { if (!authorization.bodyAccess) await startSync(request.auth.userId) }
+    catch (error) {
+      if (error.code !== 'MICROSOFT_SYNC_IN_PROGRESS') logEvent('warn', 'microsoft_initial_sync_enqueue_failed', { errorCode: error.code || 'MICROSOFT_SYNC_FAILED' })
+    }
+    return response.redirect(authorization.bodyAccess ? `${clientUrl}/top-k?microsoft=connected` : `${clientUrl}/connect/microsoft?microsoft=connected`)
   } catch (error) {
     logEvent('error', 'microsoft_oauth_callback_failed', {
       errorCode: error?.code || 'UNCLASSIFIED',
@@ -60,7 +69,7 @@ microsoftRouter.get('/oauth/callback', async (request, response) => {
       requestId: request.requestId,
       stage: error?.microsoftStage || 'authorization_completion',
     })
-    const safeCode = ['INVALID_OAUTH_STATE', 'OAUTH_USER_MISMATCH', 'MICROSOFT_REFRESH_TOKEN_MISSING', 'MICROSOFT_SCOPE_MISSING', 'MICROSOFT_CONNECTION_BUSY', 'MICROSOFT_ACCOUNT_MISMATCH'].includes(error.code)
+    const safeCode = ['INVALID_OAUTH_STATE', 'OAUTH_USER_MISMATCH', 'MICROSOFT_REFRESH_TOKEN_MISSING', 'MICROSOFT_SCOPE_MISSING', 'MICROSOFT_BODY_SCOPE_MISSING', 'MICROSOFT_CONNECTION_BUSY', 'MICROSOFT_ACCOUNT_MISMATCH'].includes(error.code)
       ? error.code.toLowerCase()
       : 'connection_failed'
     return response.redirect(`${clientUrl}/connect/microsoft?microsoft=${safeCode}`)

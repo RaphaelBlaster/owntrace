@@ -2,6 +2,8 @@ import { getAllowedOrigins, getJwtSecret } from './auth.js'
 import { getGoogleClientUrl, getGoogleConfig, getTokenEncryptionKey } from './google.js'
 import { getMicrosoftConfig, hasMicrosoftConfiguration } from './microsoft.js'
 import { getTraceExecutionConfig, orderWorkerEnabled } from './trace-execution.js'
+import { getOrderWriteBufferConfig } from './order-write-buffer.js'
+import { getGooglePushConfig, publicApiUrl } from './mail-notifications.js'
 
 const validNodeEnvironments = new Set(['development', 'production', 'test'])
 const validLogLevels = new Set(['error', 'info', 'silent'])
@@ -72,6 +74,9 @@ function validateRuntimeEnvironment() {
   const runtime = getRuntimeConfig()
   getTraceExecutionConfig()
   orderWorkerEnabled()
+  getOrderWriteBufferConfig()
+  getGooglePushConfig()
+  publicApiUrl()
   getJwtSecret()
   requireValue('MONGO_URI')
   parseInteger('BCRYPT_ROUNDS', 12, { maximum: 14, minimum: 10 })
@@ -85,7 +90,8 @@ function validateRuntimeEnvironment() {
     getAllowedOrigins().forEach((origin) => requireHttpsUrl('CLIENT_ORIGINS', origin, {
       originOnly: true,
     }))
-    requireHttpsUrl('CLIENT_APP_URL', getGoogleClientUrl(), { originOnly: true })
+    requireHttpsUrl('CLIENT_APP_URL', process.env.CLIENT_APP_URL?.trim() || 'http://localhost:5173', { originOnly: true })
+    if (process.env.GOOGLE_CLIENT_APP_URL?.trim()) requireHttpsUrl('GOOGLE_CLIENT_APP_URL', getGoogleClientUrl(), { originOnly: true })
     // Mail integrations are optional; partial configuration must still fail closed.
     if(process.env.GOOGLE_CLIENT_ID?.trim() || process.env.GOOGLE_CLIENT_SECRET?.trim()) {
       const { redirectUri } = getGoogleConfig()

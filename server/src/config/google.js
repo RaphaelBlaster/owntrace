@@ -1,9 +1,11 @@
 const GMAIL_METADATA_SCOPE = 'https://www.googleapis.com/auth/gmail.metadata'
+const GMAIL_BODY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly'
 const GOOGLE_SCOPES = [
   'openid',
   'email',
   GMAIL_METADATA_SCOPE,
 ]
+const GOOGLE_BODY_SCOPES = [...GOOGLE_SCOPES.filter((scope) => scope !== GMAIL_METADATA_SCOPE), GMAIL_BODY_SCOPE, GMAIL_METADATA_SCOPE]
 
 const GOOGLE_OAUTH_COOKIE_NAME = 'owntrace_google_oauth'
 const GOOGLE_OAUTH_DURATION_MS = 10 * 60 * 1000
@@ -29,7 +31,7 @@ function getGoogleConfig() {
 }
 
 function getGoogleClientUrl() {
-  return process.env.CLIENT_APP_URL?.trim() || 'http://localhost:5173'
+  return process.env.GOOGLE_CLIENT_APP_URL?.trim() || process.env.CLIENT_APP_URL?.trim() || 'http://localhost:5173'
 }
 
 function getTokenEncryptionKey() {
@@ -72,6 +74,8 @@ function getClearGoogleOAuthCookieOptions() {
 
 export {
   GMAIL_METADATA_SCOPE,
+  GMAIL_BODY_SCOPE,
+  GOOGLE_BODY_SCOPES,
   GOOGLE_OAUTH_COOKIE_NAME,
   GOOGLE_OAUTH_DURATION_MS,
   GOOGLE_SCOPES,

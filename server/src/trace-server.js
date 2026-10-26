@@ -5,7 +5,6 @@ import { getTraceExecutionConfig } from './config/trace-execution.js'
 import connectDatabase from './config/db.js'
 import { createTraceService } from './trace-service.js'
 import { getTraceProviderConfig } from './services/trace-provider.service.js'
-import { getTraceDecisionProvider } from './services/trace-decision-config.js'
 import { logEvent } from './utils/logger.js'
 
 let app, server, stopping = false
@@ -20,7 +19,6 @@ async function shutdown() {
 async function start() {
   const config = getTraceExecutionConfig({ service: true })
   getJwtSecret(); getTraceProviderConfig()
-  if (getTraceDecisionProvider() === 'typesafe' && !process.env.TYPESAFE_API_KEY?.trim()) throw new Error('TypeSafe must be configured for TRACE decisions')
   // A separate process gets a separate Mongo pool; keep its footprint bounded.
   await connectDatabase({ maxPoolSize: 5, serverSelectionTimeoutMS: 5000 })
   app = createTraceService()

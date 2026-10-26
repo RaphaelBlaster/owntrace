@@ -3,6 +3,7 @@ import GoogleConnection from '../models/google-connection.model.js'
 import AppError from '../utils/app-error.js'
 import { decryptSecret, encryptSecret } from '../utils/encryption.js'
 import { getGoogleConfig } from '../config/google.js'
+import { logEvent } from '../utils/logger.js'
 
 function createOAuthClient() {
   const { clientId, clientSecret, redirectUri } = getGoogleConfig()
@@ -88,6 +89,13 @@ async function withGoogleClient(userId, operation) {
     await persistRefreshedTokens(connection, refreshedTokens)
     return result
   } catch (error) {
+    const safeCode = value => typeof value === 'string' && /^[A-Za-z0-9_]{1,60}$/.test(value) ? value : undefined
+    logEvent('warn', 'google_operation_failed', {
+      errorName: safeCode(error.name),
+      errorCode: typeof error.code === 'number' ? error.code : safeCode(error.code),
+      providerStatus: error.response?.status,
+      providerReasons: error.response?.data?.error?.errors?.map(item => safeCode(item.reason)).filter(Boolean),
+    })
     const safeError = error instanceof AppError ? error : classifyGoogleError(error)
 
     if (safeError.code === 'GOOGLE_RECONNECT_REQUIRED') {

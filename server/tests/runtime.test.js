@@ -1,6 +1,15 @@
 import request from 'supertest'
 import { afterEach, describe, expect, it } from 'vitest'
 import app from '../src/app.js'
+
+it('allows the fixed company-logo host without allowing arbitrary image origins', async () => {
+  const response = await request(app).get('/api/health')
+  const images = response.headers['content-security-policy'].split(';').find(value => value.trim().startsWith('img-src'))
+  expect(images).toContain('https://icons.duckduckgo.com')
+  expect(images).not.toContain('*')
+  expect(images).not.toMatch(/(?:^|\s)https:(?:\s|$)/)
+})
+import { getGoogleClientUrl } from '../src/config/google.js'
 import {
   getRuntimeConfig,
   getTrustProxy,
@@ -13,6 +22,7 @@ const managedEnvironmentNames = [
   'CLIENT_ORIGINS',
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
+  'GOOGLE_CLIENT_APP_URL',
   'GOOGLE_REDIRECT_URI',
   'JWT_SECRET',
   'LOG_LEVEL',
@@ -58,6 +68,18 @@ function configureValidProductionEnvironment() {
 }
 
 describe('runtime configuration and health', () => {
+  it('supports a separate Google return origin while still validating the shared client origin', () => {
+    configureValidProductionEnvironment()
+    process.env.GOOGLE_CLIENT_APP_URL = 'https://google.owntrace.example'
+    expect(getGoogleClientUrl()).toBe('https://google.owntrace.example')
+    expect(validateRuntimeEnvironment().nodeEnvironment).toBe('production')
+    process.env.GOOGLE_CLIENT_APP_URL = 'http://google.owntrace.example'
+    expect(() => validateRuntimeEnvironment()).toThrow(/GOOGLE_CLIENT_APP_URL must use HTTPS/)
+    process.env.GOOGLE_CLIENT_APP_URL = 'https://google.owntrace.example'
+    process.env.CLIENT_APP_URL = 'http://app.owntrace.example'
+    expect(() => validateRuntimeEnvironment()).toThrow(/CLIENT_APP_URL must use HTTPS/)
+  })
+
   it('returns liveness, readiness, and an opaque request identifier', async () => {
     const live = await request(app).get('/api/health').expect(200)
     expect(live.body).toEqual({ message: 'OwnTrace API is running', success: true })

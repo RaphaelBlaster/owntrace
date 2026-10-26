@@ -8,6 +8,7 @@ import NotificationsPage from '../privacy/NotificationsPage.jsx'
 import PrivacyRequestsPage from '../privacy/PrivacyRequestsPage.jsx'
 import PrismWorkspace from './PrismWorkspace.jsx'
 import OrdersPage from '../orders/OrdersPage.jsx'
+import TopKPage from '../top-k/TopKPage.jsx'
 import useAuth from '../auth/useAuth.js'
 import { Overview, Accounts, AccountDetails, Subscriptions, Security, Actions, Connections, Report } from '../../demo/screens.jsx'
 
@@ -23,6 +24,7 @@ const workspaceRoutes = [
   { path: 'dashboard', title: 'Dashboard', Component: Overview, section:'dashboard' },
   { path: 'subscriptions', title: 'Subscriptions', Component: Subscriptions, section:'subscriptions' },
   { path: 'orders', title: 'Orders', Component: OrdersPage, section:'orders' },
+  { path: 'top-k', title: 'Top K', Component: TopKPage, shell: true },
   { path: 'breaches', title: 'Security', Component: Security, section:'security' },
   { path: 'exposures', title: 'Exposures', Component: ExposuresPage },
   { path: 'privacy-health', title: 'Privacy health', Component: Report, section:'health' },

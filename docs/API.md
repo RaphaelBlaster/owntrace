@@ -131,3 +131,21 @@ Request:
 The supported progression is `NOT_STARTED → PRIVACY_REVIEWED → GMAIL_PENDING`. Repeating the current step is idempotent. Unsupported states return `400 INVALID_ONBOARDING_STATUS`; skipping a required step returns `409 ONBOARDING_STEP_OUT_OF_ORDER`.
 
 `GMAIL_PENDING` means the user completed the privacy explanation and is ready to begin connection setup. It does not mean Gmail access has been granted.
+
+
+## Top K email analysis
+
+These endpoints require the signed-in session. Responses are not publicly cacheable.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/top-k?k=3` | Ranked categories, bounded scan status and first-page results; k is1–8 |
+| GET | `/api/top-k/groups` | Paginated category groups; category, status, search, kind, page and limit filters |
+| PUT | `/api/top-k/consent` | Set enabled and consent version1; disabling stops active work |
+| POST | `/api/top-k/scans` | Start/resume the selected gmail or outlook scan, at most250 inbox messages |
+| DELETE | `/api/top-k/scans/:provider` | Stop queued/active analysis without deleting saved results |
+| POST | `/api/top-k/enrichment` | Retry eligible legacy/invalid derived records within the bounded window; empty body |
+
+`kind` is `all`, `applications` or `opportunities`; page starts at1 and group limits are6,12or24. Counts and current/historical status distributions cover all matching saved groups before pagination. Messages and linked application groups are separate counts. The current scan run is not complete mailbox history.
+
+Body access is a separate OAuth upgrade using `/api/google/oauth/start?access=body` or `/api/microsoft/oauth/start?access=body`. Existing metadata-only grants are retained until the user approves broader read-only access. Enabling analysis also requires its OwnTrace consent. No attachments or mailbox changes are supported by this flow.

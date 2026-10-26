@@ -1,9 +1,7 @@
-import AppError from '../utils/app-error.js'
-
-function getTraceDecisionProvider() {
-  const provider=process.env.TRACE_DECISION_PROVIDER?.trim() || 'provider'
-  if(!['provider','typesafe'].includes(provider))throw new AppError('Choose a supported TRACE decision provider.',503,'TRACE_NOT_CONFIGURED')
-  return provider
+// Version 2 consent also authorized the configured conversation provider, so
+// it remains compatible now that TRACE no longer sends questions to Jev.
+function traceConsentVersion() { return 1 }
+function hasTraceConsent(user, provider) {
+  return user?.traceAiConsent?.provider === provider && [1, 2].includes(user.traceAiConsent.version) && Boolean(user.traceAiConsent.acceptedAt)
 }
-function traceConsentVersion() { return getTraceDecisionProvider()==='typesafe' ? 2 : 1 }
-export {getTraceDecisionProvider,traceConsentVersion}
+export { hasTraceConsent, traceConsentVersion }

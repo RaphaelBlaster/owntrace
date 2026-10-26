@@ -1,4 +1,4 @@
-const previewPages = ['dashboard', 'accounts', 'subscriptions', 'orders', 'privacy-inbox', 'account-actions', 'privacy-health', 'breaches', 'exposures', 'identity', 'notifications']
+const previewPages = ['dashboard', 'accounts', 'subscriptions', 'orders', 'top-k', 'privacy-inbox', 'account-actions', 'privacy-health', 'breaches', 'exposures', 'identity', 'notifications']
 function canPreviewPath(path) {
   return typeof path === 'string' && (previewPages.some((page) => path === `/${page}`) || /^\/accounts\/[a-f\d]{24}$/i.test(path))
 }

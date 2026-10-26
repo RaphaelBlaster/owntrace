@@ -1,7 +1,6 @@
 import crypto from 'node:crypto'
 import { google } from 'googleapis'
 import { getTokenEncryptionKey } from '../config/google.js'
-import GmailSignal from '../models/gmail-signal.model.js'
 import GmailSyncJob from '../models/gmail-sync-job.model.js'
 import GoogleConnection from '../models/google-connection.model.js'
 import AppError from '../utils/app-error.js'
@@ -11,6 +10,8 @@ import {
   syncSubscriptionsForUser,
 } from './subscription-detection.service.js'
 import { withGoogleClient } from './google-client.service.js'
+import { writeSignalPage } from './order-write-batch.service.js'
+import { drainBufferedOrderWrites } from './order-write-buffer.service.js'
 
 const BATCH_SIZE = 25
 const BATCH_LOCK_TIMEOUT_MS = 5 * 60 * 1000
@@ -92,7 +93,7 @@ function deriveSignal(userId, connectionId, message) {
   }
 }
 
-async function startSync(userId) {
+async function startSync(userId, _options = {}) {
   const connection = await GoogleConnection.findOne({ userId })
   if (!connection) throw new AppError('Connect Gmail before starting a scan.', 409, 'GOOGLE_NOT_CONNECTED')
   if (connection.status === 'NEEDS_RECONNECT') {
@@ -120,6 +121,7 @@ async function startSync(userId) {
           lastErrorCode: null,
           nextPageToken: null,
           processedCount: 0,
+          pushPending: false,
           runId: crypto.randomUUID(),
           leaseId: null,
           startedAt: new Date(),
@@ -276,37 +278,9 @@ async function processNextBatch(userId) {
         const activeLease = await GmailSyncJob.exists({ ...ownedLease, status: 'PROCESSING' })
         const activeConnection = await GoogleConnection.exists({ _id: connection.id, userId, status: 'SYNCING' })
         if (!activeLease || !activeConnection) return getSyncJob(userId)
-        const bulkResult = await GmailSignal.bulkWrite(
-          signals.map((signal) => ({
-            updateOne: {
-              filter: {
-                connectionId: signal.connectionId,
-                messageIdHash: signal.messageIdHash,
-                userId,
-              },
-              update: {
-                $set: {
-                  billingAmountMinor: signal.billingAmountMinor,
-                  billingCurrency: signal.billingCurrency,
-                  billingCycle: signal.billingCycle,
-                  occurredAt: signal.occurredAt,
-                  senderDomain: signal.senderDomain,
-                  senderEmail: signal.senderEmail,
-                  subjectSignal: signal.subjectSignal,
-                },
-                $setOnInsert: {
-                  connectionId: signal.connectionId,
-                  messageIdHash: signal.messageIdHash,
-                  threadIdHash: signal.threadIdHash,
-                  userId,
-                },
-              },
-              upsert: true,
-            },
-          })),
-          { ordered: false },
-        )
-        storedCount = bulkResult.upsertedCount
+        // Sanitized page signals go to the Redis write buffer first; the drain
+        // worker upserts them. A Redis outage falls back to a direct bulk write.
+        storedCount = await writeSignalPage('gmail', signals, userId)
       }
 
       const processedCount = job.processedCount + messages.length
@@ -336,6 +310,7 @@ async function processNextBatch(userId) {
       if (!updatedJob) return getSyncJob(userId)
 
       if (completed) {
+        await drainBufferedOrderWrites()
         await GoogleConnection.updateOne(
           { _id: connection.id, userId, status: 'SYNCING' },
           { $set: { lastErrorCode, lastSyncAt: new Date(), status: 'CONNECTED' } },
@@ -371,7 +346,7 @@ async function processNextBatch(userId) {
 async function cancelSync(userId) {
   const job = await GmailSyncJob.findOneAndUpdate(
     { userId, status: { $in: ['QUEUED', 'SCANNING', 'PROCESSING'] } },
-    { $set: { completedAt: new Date(), leaseId: crypto.randomUUID(), nextPageToken: null, status: 'CANCELLED' } },
+    { $set: { completedAt: new Date(), leaseId: crypto.randomUUID(), nextPageToken: null, pushPending: false, status: 'CANCELLED' } },
     { returnDocument: 'after' },
   )
 

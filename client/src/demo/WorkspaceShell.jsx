@@ -15,7 +15,7 @@ export default function WorkspaceShell({ children }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [expanded, setExpanded] = useState(() => { try { return sessionStorage.getItem('owntrace-navigation-expanded') === 'true' } catch { return false } })
   useEffect(() => { try { sessionStorage.setItem('owntrace-navigation-expanded', String(expanded)) } catch { /* Navigation still works without browser storage. */ } }, [expanded])
-  const labels = { accounts: 'Accounts', subscriptions: 'Subscriptions', orders: 'Orders', security: 'Security', actions: 'Action center', connections: 'Connections', report: 'Privacy report', settings: 'Settings' }
+  const labels = { accounts: 'Accounts', subscriptions: 'Subscriptions', orders: 'Orders', 'top-k': 'Top K', security: 'Security', actions: 'Action center', connections: 'Connections', report: 'Privacy report', settings: 'Settings' }
   const section = usePrismPathname(location.pathname).split('/')[2]
   useEffect(() => { setSearchOpen(false); setMenuOpen(false); window.scrollTo({ top: 0, behavior: 'instant' }); document.getElementById('dx-main')?.focus({ preventScroll: true }) }, [location.pathname])
   useEffect(() => {

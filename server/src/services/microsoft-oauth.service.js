@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import jwt from 'jsonwebtoken'
-import { MICROSOFT_OAUTH_DURATION_MS, MICROSOFT_SCOPES, getMicrosoftConfig } from '../config/microsoft.js'
+import { MICROSOFT_OAUTH_DURATION_MS, MICROSOFT_SCOPES, MICROSOFT_BODY_SCOPE, MICROSOFT_BODY_SCOPES, getMicrosoftConfig } from '../config/microsoft.js'
 import { TOKEN_AUDIENCE, TOKEN_ISSUER, getJwtSecret } from '../config/auth.js'
 import MicrosoftConnection from '../models/microsoft-connection.model.js'
 import MicrosoftSignal from '../models/microsoft-signal.model.js'
@@ -10,6 +10,8 @@ import { decryptSecret, encryptSecret } from '../utils/encryption.js'
 import User from '../models/user.model.js'
 import { removeConnectionDiscoveries } from './account-discovery.service.js'
 import { removeMicrosoftSubscriptionsForUser } from './microsoft-subscription.service.js'
+import { drainBufferedOrderWrites } from './order-write-buffer.service.js'
+import { deleteMicrosoftPush } from './microsoft-push.service.js'
 
 const issuer = `${TOKEN_ISSUER}:microsoft-oauth`
 const audience = `${TOKEN_AUDIENCE}:microsoft-oauth`
@@ -20,11 +22,11 @@ function stateMatches(first, second) { const a = Buffer.from(first || ''); const
 function endpoints() { const { tenant } = getMicrosoftConfig(); return { authorize: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`, token: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token` } }
 function validExpiry(value) { return Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 86_400 }
 
-function createAuthorizationUrl(userId) {
+function createAuthorizationUrl(userId, { bodyAccess = false } = {}) {
   const state = crypto.randomBytes(32).toString('base64url')
-  const cookieState = jwt.sign({ stateHash: hash(state) }, getJwtSecret(), { algorithm: 'HS256', audience, expiresIn: Math.floor(MICROSOFT_OAUTH_DURATION_MS / 1000), issuer, subject: userId.toString() })
+  const cookieState = jwt.sign({ stateHash: hash(state), bodyAccess }, getJwtSecret(), { algorithm: 'HS256', audience, expiresIn: Math.floor(MICROSOFT_OAUTH_DURATION_MS / 1000), issuer, subject: userId.toString() })
   const { clientId, redirectUri } = getMicrosoftConfig()
-  const params = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_mode: 'query', response_type: 'code', scope: MICROSOFT_SCOPES.join(' '), state })
+  const params = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_mode: 'query', response_type: 'code', scope: (bodyAccess ? MICROSOFT_BODY_SCOPES : MICROSOFT_SCOPES).join(' '), state })
   return { authorizationUrl: `${endpoints().authorize}?${params}`, cookieState }
 }
 
@@ -69,11 +71,12 @@ async function completeAuthorization({ code, cookieState, requestState, userId }
   try { payload = jwt.verify(cookieState, getJwtSecret(), { algorithms: ['HS256'], audience, issuer }) } catch { throw new AppError('Microsoft connection state is invalid or expired.', 400, 'INVALID_OAUTH_STATE') }
   if (!stateMatches(payload.stateHash, hash(requestState))) throw new AppError('Microsoft connection state is invalid or expired.', 400, 'INVALID_OAUTH_STATE')
   if (payload.sub !== userId.toString()) throw new AppError('Microsoft connection state does not match this session.', 403, 'OAUTH_USER_MISMATCH')
+  const bodyAccess = Boolean(payload.bodyAccess)
 
   const config = getMicrosoftConfig()
   let token
   try {
-    token = await requestJson(endpoints().token, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, code, grant_type: 'authorization_code', redirect_uri: config.redirectUri, scope: MICROSOFT_SCOPES.join(' ') }) })
+    token = await requestJson(endpoints().token, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, code, grant_type: 'authorization_code', redirect_uri: config.redirectUri, scope: (bodyAccess ? MICROSOFT_BODY_SCOPES : MICROSOFT_SCOPES).join(' ') }) })
   } catch (error) {
     error.microsoftStage = 'token_exchange'
     throw error
@@ -93,17 +96,18 @@ async function completeAuthorization({ code, cookieState, requestState, userId }
   }
   const email = typeof profile.mail === 'string' ? profile.mail : profile.userPrincipalName
   if (typeof profile.id !== 'string' || typeof email !== 'string' || !email.trim()) throw new AppError('Microsoft did not return a valid account identity.', 502, 'MICROSOFT_IDENTITY_INVALID')
-  const scopes = typeof token.scope === 'string' ? token.scope.split(/\s+/).filter(Boolean) : MICROSOFT_SCOPES
+  const scopes = typeof token.scope === 'string' ? token.scope.split(/\s+/).filter(Boolean) : (bodyAccess ? [] : MICROSOFT_SCOPES)
+  if (bodyAccess && !scopes.includes(MICROSOFT_BODY_SCOPE)) throw new AppError('Microsoft did not grant message access.', 409, 'MICROSOFT_BODY_SCOPE_MISSING')
   if (!scopes.includes('Mail.ReadBasic')) throw new AppError('Microsoft did not grant basic mail metadata permission.', 409, 'MICROSOFT_SCOPE_MISSING')
   if (existingConnection?.microsoftAccountId && existingConnection.microsoftAccountId !== profile.id) {
     throw new AppError('Disconnect the current Microsoft account before connecting a different one.', 409, 'MICROSOFT_ACCOUNT_MISMATCH')
   }
   const connection = await MicrosoftConnection.findOneAndUpdate({ userId }, { $set: { connectedAt: existingConnection?.connectedAt || new Date(), email: email.trim().toLowerCase(), encryptedAccessToken: encryptSecret(token.access_token), encryptedRefreshToken, microsoftAccountId: profile.id, scopes, status: 'CONNECTED', lastErrorCode: null, tokenExpiresAt: new Date(Date.now() + Number(token.expires_in) * 1000) } }, { returnDocument: 'after', runValidators: true, upsert: true })
   await User.updateOne({ _id: userId }, { $addToSet: { authProviders: 'microsoft' } })
-  return connection
+  return { connection, bodyAccess }
 }
 
-async function getConnectionForUser(userId, includeSecrets = false) { const query = MicrosoftConnection.findOne({ userId }); if (includeSecrets) query.select('+encryptedAccessToken +encryptedRefreshToken'); return query }
+async function getConnectionForUser(userId, includeSecrets = false) { const query = MicrosoftConnection.findOne({ userId }); if (includeSecrets) query.select('+encryptedAccessToken +encryptedRefreshToken +graphSubscriptionId'); return query }
 
 async function refreshAccessToken(userId, connection) {
   const existing = refreshLocks.get(connection.id)
@@ -114,9 +118,10 @@ async function refreshAccessToken(userId, connection) {
     if (current.tokenExpiresAt > new Date(Date.now() + 60_000)) return { accessToken: decryptSecret(current.encryptedAccessToken), connection: current }
     const config = getMicrosoftConfig()
     try {
-      const token = await requestJson(endpoints().token, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, grant_type: 'refresh_token', refresh_token: decryptSecret(current.encryptedRefreshToken), scope: MICROSOFT_SCOPES.join(' ') }) }, { reconnectOnInvalidGrant: true })
+      const refreshScopes = current.scopes.includes(MICROSOFT_BODY_SCOPE) ? MICROSOFT_BODY_SCOPES : MICROSOFT_SCOPES
+      const token = await requestJson(endpoints().token, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, grant_type: 'refresh_token', refresh_token: decryptSecret(current.encryptedRefreshToken), scope: refreshScopes.join(' ') }) }, { reconnectOnInvalidGrant: true })
       if (typeof token.access_token !== 'string' || !validExpiry(token.expires_in)) throw new AppError('Reconnect Microsoft before starting a scan.', 409, 'MICROSOFT_RECONNECT_REQUIRED')
-      const update = await MicrosoftConnection.findOneAndUpdate({ _id: current.id, userId, encryptedRefreshToken: current.encryptedRefreshToken }, { $set: { encryptedAccessToken: encryptSecret(token.access_token), ...(typeof token.refresh_token === 'string' ? { encryptedRefreshToken: encryptSecret(token.refresh_token) } : {}), lastErrorCode: null, tokenExpiresAt: new Date(Date.now() + Number(token.expires_in) * 1000) } }, { returnDocument: 'after' }).select('+encryptedAccessToken +encryptedRefreshToken')
+      const update = await MicrosoftConnection.findOneAndUpdate({ _id: current.id, userId, encryptedRefreshToken: current.encryptedRefreshToken }, { $set: { encryptedAccessToken: encryptSecret(token.access_token), ...(typeof token.refresh_token === 'string' ? { encryptedRefreshToken: encryptSecret(token.refresh_token) } : {}), lastErrorCode: null, tokenExpiresAt: new Date(Date.now() + Number(token.expires_in) * 1000) } }, { returnDocument: 'after' }).select('+encryptedAccessToken +encryptedRefreshToken +graphSubscriptionId')
       if (!update) {
         const latest = await getConnectionForUser(userId, true)
         if (latest?.encryptedAccessToken && latest.tokenExpiresAt > new Date(Date.now() + 60_000)) {
@@ -146,12 +151,18 @@ async function withMicrosoftAccessToken(userId, callback) {
 
 async function disconnectMicrosoft(userId) {
   const connection = await getConnectionForUser(userId, true)
+  if (connection) await deleteMicrosoftPush(connection)
+  const { stopTopK, removeTopKSource } = await import('./top-k.service.js')
+  await stopTopK(userId, 'outlook')
   if (connection) await MicrosoftConnection.updateOne({ _id: connection.id, userId }, { $set: { lastErrorCode: null, status: 'DISCONNECTING' } })
   const { cancelAndWaitForSync } = await import('./microsoft-sync.service.js')
   await cancelAndWaitForSync(userId)
   const { removeOrderSource } = await import('./order-control.service.js')
   await removeOrderSource(userId, 'outlook', connection?.id)
+  // Flush buffered writes first so a queued page cannot resurrect deleted data.
+  await drainBufferedOrderWrites()
   await Promise.all([
+    ...(connection ? [removeTopKSource(userId, 'outlook', connection.id)] : []),
     ...(connection ? [removeConnectionDiscoveries(userId, connection.id)] : []),
     MicrosoftSignal.deleteMany({ userId, ...(connection ? { connectionId: connection.id } : {}) }),
     MicrosoftSyncJob.deleteMany({ userId, ...(connection ? { connectionId: connection.id } : {}) }),

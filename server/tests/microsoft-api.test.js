@@ -10,6 +10,8 @@ import MicrosoftSubscription from '../src/models/microsoft-subscription.model.js
 import Subscription from '../src/models/subscription.model.js'
 import User from '../src/models/user.model.js'
 import { decryptSecret, encryptSecret } from '../src/utils/encryption.js'
+import { withMicrosoftAccessToken } from '../src/services/microsoft-oauth.service.js'
+import * as microsoftPush from '../src/services/microsoft-push.service.js'
 
 const password = 'microsoft API test password'
 
@@ -100,6 +102,38 @@ describe('Microsoft integration API', () => {
     expect(callback.headers.location).toBe('http://localhost:5173/connect/microsoft?microsoft=connected')
     expect((await User.findById(first.userId)).authProviders).toContain('microsoft')
     expect(await MicrosoftConnection.countDocuments({ userId: first.userId })).toBe(1)
+  })
+
+  it('requests Mail.Read only for body consent and skips the automatic metadata scan', async () => {
+    const first = await register('microsoft-body-oauth@example.com')
+    const start = await first.agent.get('/api/microsoft/oauth/start?access=body').expect(302)
+    const authorizationUrl = new URL(start.headers.location)
+    expect(authorizationUrl.searchParams.get('scope').split(' ')).toContain('Mail.Read')
+    const state = authorizationUrl.searchParams.get('state')
+    const ensurePush = vi.spyOn(microsoftPush, 'ensureMicrosoftPush')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'access-token', refresh_token: 'refresh-token', expires_in: 3600, scope: 'openid profile email offline_access User.Read Mail.ReadBasic Mail.Read' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'microsoft-body-account', mail: 'microsoft-body-oauth@example.com' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const callback = await first.agent.get(`/api/microsoft/oauth/callback?code=oauth-code&state=${encodeURIComponent(state)}`).expect(302)
+    expect(callback.headers.location).toBe('http://localhost:5173/top-k?microsoft=connected')
+    expect((await MicrosoftConnection.findOne({ userId: first.userId })).scopes).toContain('Mail.Read')
+    expect(ensurePush).not.toHaveBeenCalled()
+    expect(await MicrosoftSyncJob.countDocuments({ userId: first.userId })).toBe(0)
+  })
+
+  it('preserves Mail.Read during Microsoft token refresh when body access was granted', async () => {
+    const first = await register('microsoft-body-refresh@example.com')
+    await MicrosoftConnection.create({
+      userId: first.userId, microsoftAccountId: 'microsoft-body-refresh-account', email: 'microsoft-body-refresh@example.com',
+      encryptedAccessToken: encryptSecret('expired-access'), encryptedRefreshToken: encryptSecret('refresh-token'),
+      scopes: ['Mail.ReadBasic', 'Mail.Read'], tokenExpiresAt: new Date(Date.now() - 1000),
+    })
+    const refreshFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ access_token: 'fresh-access', expires_in: 3600 }), { status: 200 }))
+    vi.stubGlobal('fetch', refreshFetch)
+    await expect(withMicrosoftAccessToken(first.userId, ({ accessToken }) => accessToken)).resolves.toBe('fresh-access')
+    expect(new URLSearchParams(refreshFetch.mock.calls[0][1].body).get('scope').split(' ')).toContain('Mail.Read')
   })
 
   it('atomically rejects a second active sync start and stores one metadata batch', async () => {

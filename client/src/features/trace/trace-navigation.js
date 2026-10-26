@@ -1,4 +1,4 @@
-const pages = new Set(['dashboard', 'accounts', 'subscriptions', 'orders', 'privacy-inbox', 'account-actions', 'privacy-health', 'breaches', 'exposures', 'connect', 'settings'])
+const pages = new Set(['dashboard', 'accounts', 'subscriptions', 'orders', 'top-k', 'privacy-inbox', 'account-actions', 'privacy-health', 'breaches', 'exposures', 'connect', 'settings'])
 const validId = (id) => typeof id === 'string' && /^[a-f\d]{24}$/i.test(id)
 function actionDestination(action) {
   if (!action || typeof action !== 'object') return null

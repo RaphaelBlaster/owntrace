@@ -8,7 +8,6 @@ import Conversation from './models/trace-conversation.model.js'
 import { answerTrace } from './services/trace-assistant.service.js'
 import { checkTraceConsent } from './services/trace-consent.service.js'
 import { getTraceProviderConfig } from './services/trace-provider.service.js'
-import { getTraceDecisionProvider } from './services/trace-decision-config.js'
 import { writeTraceFrame, waitForTraceDrain } from './services/trace-execution.service.js'
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js'
 import AppError from './utils/app-error.js'
@@ -27,7 +26,6 @@ export function createTraceService({ engine = answerTrace } = {}) {
     let configured = true
     try {
       getTraceProviderConfig()
-      if (getTraceDecisionProvider() === 'typesafe' && !process.env.TYPESAFE_API_KEY?.trim()) configured = false
     } catch { configured = false }
     response.status(mongoose.connection.readyState === 1 && configured ? 200 : 503).json({ ready: mongoose.connection.readyState === 1 && configured, active: active.size })
   })

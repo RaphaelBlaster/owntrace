@@ -125,6 +125,18 @@ function GmailConnectionPage() {
     return () => { stopSyncRef.current = true }
   }, [loadConnection])
 
+  useEffect(() => {
+    if (!['QUEUED', 'SCANNING', 'PROCESSING'].includes(sync?.status) || isSyncing || isDisconnecting) return undefined
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await api.get('/google/sync')
+        setSync(response.data.sync)
+        if (response.data.sync?.status === 'COMPLETED') await restoreSession({ showLoading: false })
+      } catch {}
+    }, 2500)
+    return () => window.clearInterval(timer)
+  }, [sync?.status, isSyncing, isDisconnecting, restoreSession])
+
   async function handleDisconnect() {
     stopSyncRef.current = true
     setIsDisconnecting(true)
@@ -151,8 +163,9 @@ function GmailConnectionPage() {
     setError('')
 
     try {
-      while (currentSync?.status === 'QUEUED' && !stopSyncRef.current) {
-        const response = await api.post('/google/sync/next')
+      while (['QUEUED', 'SCANNING', 'PROCESSING'].includes(currentSync?.status) && !stopSyncRef.current) {
+        await new Promise(resolve => window.setTimeout(resolve, 2000))
+        const response = await api.get('/google/sync')
         if (stopSyncRef.current) return
         currentSync = response.data.sync
         setSync(currentSync)
@@ -244,6 +257,7 @@ function GmailConnectionPage() {
             <dl className="google-connection-details">
               <div><dt>Connected</dt><dd>{formatDate(connection.connectedAt)}</dd></div>
               <div><dt>Last metadata sync</dt><dd>{formatDate(connection.lastSyncAt)}</dd></div>
+              <div><dt>Automatic updates</dt><dd>{connection.pushStatus === 'ACTIVE' ? 'On' : connection.pushStatus === 'ERROR' ? 'Needs setup' : 'Not configured'}</dd></div>
               <div><dt>Gmail access</dt><dd>Metadata only</dd></div>
             </dl>
           ) : null}
@@ -284,7 +298,7 @@ function GmailConnectionPage() {
             </div>
             <dl>
               <div><dt>Email metadata checked</dt><dd>{sync?.processedCount ?? 0}</dd></div>
-              <div><dt>New clues saved</dt><dd>{sync?.storedCount ?? 0}</dd></div>
+              <div><dt>Signals queued</dt><dd>{sync?.storedCount ?? 0}</dd></div>
             </dl>
             {sync?.lastErrorCode ? (
               <p className="google-configuration-note">

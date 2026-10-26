@@ -8,6 +8,8 @@ import { deriveSubjectSignal } from './gmail-sync.service.js'
 import { discoverAccountsForUser } from './account-discovery.service.js'
 import { extractBillingMetadata } from './subscription-detection.service.js'
 import { syncMicrosoftSubscriptions } from './microsoft-subscription.service.js'
+import { writeSignalPage } from './order-write-batch.service.js'
+import { drainBufferedOrderWrites } from './order-write-buffer.service.js'
 import { withMicrosoftAccessToken } from './microsoft-oauth.service.js'
 
 const BATCH_SIZE = 25
@@ -118,7 +120,7 @@ async function getSyncJob(userId, { includePageLink = false } = {}) {
   return query
 }
 
-async function startSync(userId) {
+async function startSync(userId, _options = {}) {
   const connection = await MicrosoftConnection.findOne({ userId })
   if (!connection) throw new AppError('Connect Microsoft before starting a scan.', 409, 'MICROSOFT_NOT_CONNECTED')
   if (connection.status === 'NEEDS_RECONNECT') throw new AppError('Reconnect Microsoft before starting a scan.', 409, 'MICROSOFT_RECONNECT_REQUIRED')
@@ -131,7 +133,7 @@ async function startSync(userId) {
         { status: { $nin: ['QUEUED', 'SCANNING', 'PROCESSING'] } },
         { status: { $in: ['SCANNING', 'PROCESSING'] }, updatedAt: { $lt: new Date(now.getTime() - BATCH_LOCK_TIMEOUT_MS) } },
       ] },
-      { $set: { cancelRequestedAt: null, completedAt: null, connectionId: connection.id, estimatedTotal: null, lastErrorCode: null, leaseId: null, nextPageLink: null, processedCount: 0, runId: crypto.randomUUID(), startedAt: now, status: 'QUEUED', storedCount: 0 } },
+      { $set: { cancelRequestedAt: null, completedAt: null, connectionId: connection.id, estimatedTotal: null, lastErrorCode: null, leaseId: null, nextPageLink: null, processedCount: 0, pushPending: false, runId: crypto.randomUUID(), startedAt: now, status: 'QUEUED', storedCount: 0 } },
       { returnDocument: 'after', runValidators: true, upsert: true },
     )
   } catch (error) {
@@ -165,7 +167,7 @@ async function processNextBatch(userId) {
       if (!Array.isArray(page.value) || page.value.length > BATCH_SIZE || (page['@odata.nextLink'] !== undefined && typeof page['@odata.nextLink'] !== 'string')) {
         throw new AppError('Microsoft returned an invalid mailbox response.', 502, 'MICROSOFT_REQUEST_FAILED')
       }
-      const messages = page.value.slice(0, BATCH_SIZE)
+      const messages = page.value.slice(0, Math.min(BATCH_SIZE, Math.max(0, getMessageLimit() - job.processedCount)))
       const processing = await MicrosoftSyncJob.updateOne(
         { _id: job.id, userId, runId: job.runId, leaseId, status: 'SCANNING' },
         { $set: { status: 'PROCESSING' } },
@@ -178,11 +180,9 @@ async function processNextBatch(userId) {
         const activeLease = await MicrosoftSyncJob.exists({ _id: job.id, userId, runId: job.runId, leaseId, status: 'PROCESSING' })
         const activeConnection = await MicrosoftConnection.exists({ _id: connection.id, userId, status: 'SYNCING' })
         if (!activeLease || !activeConnection) return getSyncJob(userId)
-        const result = await MicrosoftSignal.bulkWrite(signals.map((signal) => ({ updateOne: {
-          filter: { connectionId: signal.connectionId, messageIdHash: signal.messageIdHash, userId },
-          update: { $set: { billingAmountMinor: signal.billingAmountMinor, billingCurrency: signal.billingCurrency, billingCycle: signal.billingCycle, occurredAt: signal.occurredAt, senderDomain: signal.senderDomain, senderEmail: signal.senderEmail, subjectSignal: signal.subjectSignal }, $setOnInsert: { connectionId: signal.connectionId, messageIdHash: signal.messageIdHash, syncRunId: job.runId, threadIdHash: signal.threadIdHash, userId } }, upsert: true,
-        } })), { ordered: false })
-        storedCount = result.upsertedCount
+        // Sanitized page signals go to the Redis write buffer first; the drain
+        // worker upserts them. A Redis outage falls back to a direct bulk write.
+        storedCount = await writeSignalPage('outlook', signals, userId, { syncRunId: job.runId })
       }
 
       const processedCount = job.processedCount + messages.length
@@ -198,6 +198,8 @@ async function processNextBatch(userId) {
       if (!updated) {
         const currentState = await MicrosoftSyncJob.findById(job.id).select('+runId')
         if (currentState?.status === 'CANCELLED' && currentState.runId === job.runId) {
+          // Drain first so a buffered page cannot resurrect cancelled signals.
+          await drainBufferedOrderWrites()
           await MicrosoftSignal.deleteMany({ userId, connectionId: job.connectionId, syncRunId: job.runId })
         }
         return getSyncJob(userId)
@@ -206,19 +208,21 @@ async function processNextBatch(userId) {
       return updated
     })
     if (updatedJob?.status === 'COMPLETED') {
+      await drainBufferedOrderWrites()
       await discoverAccountsForUser(userId)
       await syncMicrosoftSubscriptions(userId)
     }
     return updatedJob
   } catch (error) {
-    const ownsLease = await MicrosoftSyncJob.exists({ _id: job.id, userId, runId: job.runId, leaseId, status: { $in: ['SCANNING', 'PROCESSING'] } })
+    const ownsLease = await MicrosoftSyncJob.exists({ _id: job.id, userId, runId: job.runId, leaseId, status: { $in: ['SCANNING', 'PROCESSING', 'COMPLETED'] } })
     if (ownsLease) {
-      if (error.code === 'MICROSOFT_RECONNECT_REQUIRED') await MicrosoftConnection.updateOne({ _id: job.connectionId, userId, status: 'SYNCING' }, { $set: { lastErrorCode: error.code, status: 'NEEDS_RECONNECT' } })
-      else await MicrosoftConnection.updateOne({ _id: job.connectionId, userId, status: 'SYNCING' }, { $set: { lastErrorCode: error.code || 'MICROSOFT_SYNC_FAILED', status: 'ERROR' } })
-      await MicrosoftSyncJob.updateOne({ _id: job.id, userId, runId: job.runId, leaseId, status: { $in: ['SCANNING', 'PROCESSING'] } }, { $set: { lastErrorCode: error.code || 'MICROSOFT_SYNC_FAILED', status: 'FAILED' } })
+      if (error.code === 'MICROSOFT_RECONNECT_REQUIRED') await MicrosoftConnection.updateOne({ _id: job.connectionId, userId, status: { $in: ['SYNCING', 'CONNECTED'] } }, { $set: { lastErrorCode: error.code, status: 'NEEDS_RECONNECT' } })
+      else await MicrosoftConnection.updateOne({ _id: job.connectionId, userId, status: { $in: ['SYNCING', 'CONNECTED'] } }, { $set: { lastErrorCode: error.code || 'MICROSOFT_SYNC_FAILED', status: 'ERROR' } })
+      await MicrosoftSyncJob.updateOne({ _id: job.id, userId, runId: job.runId, leaseId, status: { $in: ['SCANNING', 'PROCESSING', 'COMPLETED'] } }, { $set: { lastErrorCode: error.code || 'MICROSOFT_SYNC_FAILED', status: 'FAILED' } })
     } else {
       const currentState = await MicrosoftSyncJob.findById(job.id).select('+runId')
       if (currentState?.status === 'CANCELLED' && currentState.runId === job.runId) {
+        await drainBufferedOrderWrites()
         await MicrosoftSignal.deleteMany({ userId, connectionId: job.connectionId, syncRunId: job.runId })
       }
     }
@@ -232,7 +236,7 @@ async function processNextBatch(userId) {
 async function cancelSync(userId) {
   const job = await MicrosoftSyncJob.findOneAndUpdate(
     { userId, status: { $in: ['QUEUED', 'SCANNING', 'PROCESSING'] } },
-    { $set: { cancelRequestedAt: new Date(), completedAt: new Date(), leaseId: crypto.randomUUID(), nextPageLink: null, status: 'CANCELLED' } }, { returnDocument: 'after' },
+    { $set: { cancelRequestedAt: new Date(), completedAt: new Date(), leaseId: crypto.randomUUID(), nextPageLink: null, pushPending: false, status: 'CANCELLED' } }, { returnDocument: 'after' },
   ).select('+runId')
   if (job) await MicrosoftConnection.updateOne({ _id: job.connectionId, userId, status: 'SYNCING' }, { $set: { lastErrorCode: null, status: 'CONNECTED' } })
   return job
@@ -244,7 +248,11 @@ async function cancelAndWaitForSync(userId) {
     .filter(([key]) => key.startsWith(`${userId}:`))
     .map(([, barrier]) => barrier)
   await Promise.all(barriers)
-  if (job) await MicrosoftSignal.deleteMany({ userId, connectionId: job.connectionId, syncRunId: job.runId })
+  if (job) {
+    // Drain first so a buffered page cannot resurrect cancelled signals.
+    await drainBufferedOrderWrites()
+    await MicrosoftSignal.deleteMany({ userId, connectionId: job.connectionId, syncRunId: job.runId })
+  }
   return job
 }
 

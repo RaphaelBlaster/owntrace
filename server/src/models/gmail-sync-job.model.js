@@ -28,6 +28,7 @@ const gmailSyncJobSchema = new mongoose.Schema(
     lastErrorCode: { type: String, default: null },
     startedAt: { type: Date, default: Date.now },
     completedAt: { type: Date, default: null },
+    pushPending: { type: Boolean, default: false, select: false },
   },
   {
     timestamps: true,
@@ -41,6 +42,7 @@ const gmailSyncJobSchema = new mongoose.Schema(
         delete returnedObject.nextPageToken
         delete returnedObject.runId
         delete returnedObject.leaseId
+        delete returnedObject.pushPending
         return returnedObject
       },
     },

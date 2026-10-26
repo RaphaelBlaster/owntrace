@@ -10,7 +10,7 @@ const policies = {
       ['What OwnTrace processes', [
         'Account details you provide, including your name, email address, and password hash.',
         'Google account connection details and encrypted OAuth tokens when you choose to connect Gmail.',
-        'Minimized Gmail metadata signals derived from selected headers. OwnTrace does not request or store email bodies, snippets, attachments, or raw MIME content.',
+        'Default Gmail and Outlook discovery uses selected metadata headers. The separate, optional Top K feature reads bounded message-body excerpts only after additional read-only provider consent and enabling email analysis. Raw bodies and attachments are not stored; attachment content is not analyzed.',
         'Derived account, subscription, security, exposure, privacy-request, and notification records created to provide the product.',
       ]],
       ['How information is used', [
@@ -18,7 +18,8 @@ const policies = {
         'OwnTrace does not sell personal information or use Gmail-derived data for advertising.',
       ]],
       ['External services', [
-        'Google supplies identity and Gmail metadata only after your explicit OAuth consent. OwnTrace requests openid, email, and gmail.metadata.',
+        'Google supplies identity and Gmail metadata after explicit OAuth consent (openid, email, gmail.metadata). Top K separately requests gmail.readonly. Outlook metadata access uses Mail.ReadBasic; optional body analysis requests Mail.Read.',
+        'For Top K, TypeSafe Jev receives minimized sender-domain, subject and date metadata. Inception Mercury receives redacted body excerpts for eligible messages. OwnTrace stores derived categories, summaries and short evidence excerpts. Redaction and model judgments can be imperfect. Each run checks at most the latest 250 inbox messages.',
         'A breach check sends your OwnTrace account email to XposedOrNot only after you separately confirm that check. OwnTrace stores minimized breach names and check timestamps, not the provider response or submitted email copy.',
       ]],
       ['Retention and deletion', [
@@ -28,11 +29,11 @@ const policies = {
       ]],
       ['Security and your choices', [
         'OwnTrace uses httpOnly session cookies, encrypted provider tokens, minimized stored metadata, authenticated user-scoped APIs, and bounded processing. No internet service can promise absolute security.',
-        'You can choose not to connect Gmail, decline breach checks, disconnect Google, or delete your OwnTrace account.',
+        'You can decline body access, disable Top K analysis to stop queued and active work, decline breach checks, disconnect a mailbox, or delete your OwnTrace account. Disabling analysis retains already-derived results; disconnecting the source or deleting your account removes its local results.',
       ]],
       ['Contact and changes', [
         'Until a dedicated private support channel is published, use the project repository for general questions and do not post personal information, credentials, tokens, or private account details in a public issue.',
-        'Material policy changes should be dated and presented before they take effect.',
+        'Updated 26 October 2026 to describe optional Top K body processing. The Top K consent panel describes this processing before it is enabled.',
       ]],
     ],
   },

@@ -24,8 +24,7 @@ beforeEach(() => vi.stubEnv('TRACE_PROVIDER', 'azure'))
 function mockProvider(provider, families=[]) {
   vi.stubGlobal('fetch', vi.fn(async (url,options)=>{
     const body=JSON.parse(options.body)
-    if(body.tools?.[0]?.function?.name==='classify_scope')return new Response(JSON.stringify({choices:[{message:{tool_calls:[{id:'scope',type:'function',function:{name:'classify_scope',arguments:JSON.stringify({scope:'allowed',effect:'read_only',requiresRecords:families.length>0,requiredRecords:families})}}]}}]}))
-    if(String(url).endsWith('/decisions'))return new Response(JSON.stringify({answers:{scope:{type:'choice',choice:'allowed',confidence:1,probabilities:{allowed:1,clarify:0,out_of_domain:0}},effect:{type:'choice',choice:'read_only',confidence:1,probabilities:{read_only:1,confirmation_required:0}},needs_records:{type:'noul',noul:families.length?1:0},record_family:{type:'choice',choice:families[0]||'none',probabilities:Object.fromEntries(['accounts','subscriptions','actions','health','security','status','orders','none'].map(key=>[key,key===(families[0]||'none')?1:0]))}}}))
+    if(body.tools?.[0]?.function?.name==='plan_trace_retrieval')return new Response(JSON.stringify({choices:[{message:{tool_calls:[{id:'plan',type:'function',function:{name:'plan_trace_retrieval',arguments:JSON.stringify({requiredFamilies:families})}}]}}]}))
     return provider(url,options)
   }))
 }

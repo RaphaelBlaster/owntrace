@@ -1,6 +1,8 @@
 import { getTokenEncryptionKey } from './google.js'
 
 const MICROSOFT_SCOPES = ['openid', 'profile', 'email', 'offline_access', 'User.Read', 'Mail.ReadBasic']
+const MICROSOFT_BODY_SCOPE = 'Mail.Read'
+const MICROSOFT_BODY_SCOPES = [...MICROSOFT_SCOPES, MICROSOFT_BODY_SCOPE]
 const MICROSOFT_OAUTH_COOKIE_NAME = 'owntrace_microsoft_oauth'
 const MICROSOFT_OAUTH_DURATION_MS = 10 * 60 * 1000
 
@@ -16,4 +18,4 @@ function getMicrosoftClientUrl() { return process.env.CLIENT_APP_URL?.trim() || 
 function getMicrosoftOAuthCookieOptions() { return { httpOnly: true, maxAge: MICROSOFT_OAUTH_DURATION_MS, path: '/api/microsoft/oauth', sameSite: 'lax', secure: process.env.NODE_ENV === 'production' } }
 function getClearMicrosoftOAuthCookieOptions() { const { maxAge: _maxAge, ...options } = getMicrosoftOAuthCookieOptions(); return options }
 
-export { MICROSOFT_OAUTH_COOKIE_NAME, MICROSOFT_OAUTH_DURATION_MS, MICROSOFT_SCOPES, getClearMicrosoftOAuthCookieOptions, getMicrosoftClientUrl, getMicrosoftConfig, getMicrosoftOAuthCookieOptions, hasMicrosoftConfiguration, isMicrosoftConfigured }
+export { MICROSOFT_OAUTH_COOKIE_NAME, MICROSOFT_OAUTH_DURATION_MS, MICROSOFT_SCOPES, MICROSOFT_BODY_SCOPE, MICROSOFT_BODY_SCOPES, getClearMicrosoftOAuthCookieOptions, getMicrosoftClientUrl, getMicrosoftConfig, getMicrosoftOAuthCookieOptions, hasMicrosoftConfiguration, isMicrosoftConfigured }

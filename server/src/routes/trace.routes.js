@@ -11,7 +11,7 @@ import { SESSION_COOKIE_NAME } from '../config/auth.js'
 import { getTraceProviderConfig, getTraceProviderName } from '../services/trace-provider.service.js'
 import { executeTraceTool } from '../services/trace-tools.service.js'
 import AppError from '../utils/app-error.js'
-import {getTraceDecisionProvider,traceConsentVersion} from '../services/trace-decision-config.js'
+import { hasTraceConsent, traceConsentVersion } from '../services/trace-decision-config.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -27,13 +27,11 @@ async function owned(request) {
 }
 router.get('/status', (_request, response) => {
   let configured = true
-  try { getTraceProviderConfig(); if(getTraceDecisionProvider()==='typesafe' && !process.env.TYPESAFE_API_KEY?.trim())configured=false } catch { configured = false }
+  try { getTraceProviderConfig() } catch { configured = false }
   let provider
   try { provider = getTraceProviderName() } catch { provider = 'unavailable' }
-  let decisionProvider,version
-  try {decisionProvider=getTraceDecisionProvider();version=traceConsentVersion()}catch{decisionProvider='unavailable';version=-1}
   const label=provider === 'azure' ? 'Azure OpenAI' : provider === 'inception' ? 'Inception Labs' : 'AI provider'
-  response.json({configured,provider,decisionProvider,providerLabel:label+(decisionProvider==='typesafe'?' + TypeSafe Jev':''),consentEnabled:_request.user.traceAiConsent?.provider===provider && _request.user.traceAiConsent?.version===version && Boolean(_request.user.traceAiConsent?.acceptedAt)})
+  response.json({configured,provider,providerLabel:label,consentEnabled:hasTraceConsent(_request.user,provider)})
 })
 router.put('/consent', async (request, response) => {
   if (typeof request.body?.enabled !== 'boolean' || Object.keys(request.body).some((key) => key !== 'enabled')) throw new AppError('Choose whether to enable TRACE AI processing.', 400, 'INVALID_TRACE_CONSENT')

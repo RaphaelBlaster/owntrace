@@ -5,11 +5,12 @@ import GoogleConnection from '../models/google-connection.model.js'
 import MicrosoftConnection from '../models/microsoft-connection.model.js'
 import GmailSyncJob from '../models/gmail-sync-job.model.js'
 import MicrosoftSyncJob from '../models/microsoft-sync-job.model.js'
+import { MailAnalysis } from '../models/mail-insight.model.js'
 import AppError from '../utils/app-error.js'
 import { summarizeTraceResult } from './trace-grounding.js'
 import { listOrderCards, orderDetails } from './order-query.service.js'
 
-const pages = ['dashboard', 'accounts', 'subscriptions', 'orders', 'privacy-inbox', 'account-actions', 'privacy-health', 'breaches', 'exposures', 'connect', 'settings']
+const pages = ['dashboard', 'accounts', 'subscriptions', 'orders', 'top-k', 'privacy-inbox', 'account-actions', 'privacy-health', 'breaches', 'exposures', 'connect', 'settings']
 const text = { type: 'string', maxLength: 80 }
 const id = { type: 'string', pattern: '^[a-fA-F0-9]{24}$' }
 const pageNumber = { type: 'integer', minimum: 1, maximum: 10000 }
@@ -19,6 +20,7 @@ const definitions = [
   ['get_account', 'Get an owned account and supporting metadata evidence. Use an ID returned by query_accounts.', { accountId: id }],
   ['query_subscriptions', 'Read merged Gmail/Microsoft subscription signals. Amounts may be unknown; estimates do not prove active billing.', { page: pageNumber }],
   ['query_orders', 'Read this user’s saved order email events and exact pagination. Events are evidence inferences, not unique purchase counts or live carrier tracking. Never start a scan.', { page: pageNumber }],
+  ['query_mail_insights', 'Read this user’s saved, derived mail insights. For any job question set category to jobs. Use kind applications for actual application timelines, opportunities for alerts or invitations with no evidence of an application, and all when comparing both. Empty category reads all categories. Status distributions cover all matching saved groups before pagination. Never search mailbox contents or start a scan.', { category: { type: 'string', enum: ['', 'jobs', 'orders', 'subscriptions', 'security', 'finance', 'travel', 'social', 'marketing', 'spam', 'personal', 'other'] }, status: { type: 'string', maxLength: 60 }, search: text, page: pageNumber, kind: { type: 'string', enum: ['applications', 'opportunities', 'all'] } }],
   ['get_order', 'Read an owned order event and timeline grouped by explicit reference and sender domain.', { orderId: id }],
   ['open_order', 'Open the real evidence timeline for an owned order event, when asked to show it.', { orderId: id }],
   ['privacy_overview', 'Read current privacy actions, derived health estimate, or stored security findings; never initiate a scan or breach check.', { section: { type: 'string', enum: ['actions', 'health', 'security'] }, page: pageNumber }],
@@ -31,10 +33,17 @@ const definitions = [
   ['focus_entity', 'Show and highlight a specific owned account or subscription returned by retrieval; resolve its actual page on server.', { entityType: { type: 'string', enum: ['account', 'subscription'] }, entityId: id }],
 ]
 const traceTools = definitions.map(([name, description, properties]) => ({ type: 'function', function: { name, description, strict: true, parameters: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } } }))
+const planFamilies = ['accounts', 'subscriptions', 'orders', 'applications', 'opportunities', 'mailInsights', 'actions', 'health', 'security', 'status']
+const tracePlanTool = { type: 'function', function: { name: 'plan_trace_retrieval', description: 'Identify which current private OwnTrace record families are needed to answer the latest request. Use applications for actual jobs the user applied to or their status updates; use opportunities only for alerts/invitations to apply. Use an empty array for greetings, general explanations and hypothetical questions that need no saved records. This only plans retrieval; it does not answer or read data.', strict: true, parameters: { type: 'object', properties: { requiredFamilies: { type: 'array', items: { type: 'string', enum: planFamilies } } }, required: ['requiredFamilies'], additionalProperties: false } } }
+function validateTracePlan(args) {
+  if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).length !== 1 || !Array.isArray(args.requiredFamilies) || args.requiredFamilies.length > planFamilies.length || args.requiredFamilies.some(family => !planFamilies.includes(family))) throw new AppError('TRACE could not validate its retrieval plan.', 502, 'TRACE_PLAN_INVALID')
+  return [...new Set(args.requiredFamilies)]
+}
 
 // Server-owned coverage describes actual reads, including reads nested in presentation tools.
 function traceToolCoverage(name,args={}) {
   if(['query_orders','get_order','open_order'].includes(name))return ['orders']
+  if(name==='query_mail_insights')return !['jobs',''].includes(args.category) ? ['mailInsights'] : args.kind === 'applications' ? ['applications','mailInsights'] : args.kind === 'opportunities' ? ['opportunities','mailInsights'] : ['applications','opportunities','mailInsights']
   if(['query_accounts','get_account','open_account'].includes(name))return ['accounts']
   if(['query_subscriptions','show_subscriptions'].includes(name))return ['subscriptions']
   if(name==='focus_entity')return [args.entityType==='account'?'accounts':'subscriptions']
@@ -45,6 +54,16 @@ function traceToolCoverage(name,args={}) {
     if(['subscription','subscriptions'].includes(args.view))return ['subscriptions']
   }
   return []
+}
+function traceToolsForCoverage(requiredFamilies = []) {
+  const families = {
+    query_accounts: ['accounts'], get_account: ['accounts'], open_account: ['accounts'], focus_entity: ['accounts','subscriptions'],
+    query_subscriptions: ['subscriptions'], show_subscriptions: ['subscriptions'], query_orders: ['orders'], get_order: ['orders'], open_order: ['orders'],
+    query_mail_insights: ['applications','opportunities','mailInsights'], privacy_overview: ['actions','health','security'], workspace_status: ['status'],
+  }
+  const always = new Set(['finish_answer','calculate','navigate_to_page','close_preview'])
+  const required = new Set(requiredFamilies)
+  return traceTools.filter(tool => always.has(tool.function.name) || (families[tool.function.name] || []).some(family => required.has(family)))
 }
 
 function validateTool(name, args) {
@@ -105,6 +124,10 @@ async function executeTraceTool(userId, name, args) {
     data = await listOrderCards(userId, { page: args.page, limit: 12 })
     sources.push(source('Order email events', { type: 'navigate_to_page', page: 'orders' }))
     sources.push(...data.orders.map(item => source(item.merchant.name + ' · order evidence', { type: 'open_order', orderId: item.id })))
+  } else if (name === 'query_mail_insights') {
+    const { queryMailInsights } = await import('./mail-insight-query.service.js')
+    data = await queryMailInsights(userId, args)
+    sources.push(source('Saved email insights', { type: 'navigate_to_page', page: 'top-k' }))
   } else if (['get_order','open_order'].includes(name)) {
     data = await orderDetails(userId, args.orderId)
     sources.push(source(data.order.merchant.name + ' · order evidence', { type: 'open_order', orderId: data.order.id }))
@@ -127,11 +150,12 @@ async function executeTraceTool(userId, name, args) {
   } else if (name === 'workspace_status') {
     const connectionFields = 'status connectedAt lastSyncAt lastErrorCode -_id'
     const jobFields = 'status processedCount storedCount estimatedTotal startedAt completedAt lastErrorCode -_id'
-    const [google, microsoft, gmailScan, microsoftScan] = await Promise.all([
+    const [google, microsoft, gmailScan, microsoftScan, mailAnalysis] = await Promise.all([
       GoogleConnection.findOne({ userId }).select(connectionFields).lean(), MicrosoftConnection.findOne({ userId }).select(connectionFields).lean(),
       GmailSyncJob.findOne({ userId }).select(jobFields).lean(), MicrosoftSyncJob.findOne({ userId }).select(jobFields).lean(),
+      MailAnalysis.findOne({ userId }).select('enabled status provider processed limit updatedAt lastErrorCode enrichmentStatus enrichmentProcessed enrichmentErrorCode -_id').lean(),
     ])
-    data = { google, microsoft, gmailScan, microsoftScan, observedAt: new Date().toISOString() }
+    data = { google, microsoft, gmailScan, microsoftScan, mailAnalysis, observedAt: new Date().toISOString() }
     sources.push(source('Mail connections and scan status', { type: 'navigate_to_page', page: 'connect' }))
   } else {
     data = { page: args.page }
@@ -139,4 +163,4 @@ async function executeTraceTool(userId, name, args) {
   }
   return { coverage:traceToolCoverage(name,args), resultSummary:summarizeTraceResult(data), query:args, data, sources, actions, retrievedAt: new Date().toISOString() }
 }
-export { executeTraceTool, traceTools, validateTool, traceToolCoverage, pages }
+export { executeTraceTool, traceTools, traceToolsForCoverage, validateTool, traceToolCoverage, tracePlanTool, validateTracePlan, pages }

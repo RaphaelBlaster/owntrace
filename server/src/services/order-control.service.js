@@ -1,6 +1,7 @@
 import OrderScan from '../models/order-scan.model.js'
 import OrderEvent from '../models/order-event.model.js'
 import OrderReceipt from '../models/order-receipt.model.js'
+import { drainBufferedOrderWrites } from './order-write-buffer.service.js'
 const active = new Map()
 export function registerOrderWork(key, entry) { active.set(key, entry) }
 export function releaseOrderWork(key) { active.delete(key) }
@@ -14,5 +15,7 @@ export async function cancelOrderWork(userId, provider) {
 export async function removeOrderSource(userId, provider, connectionId) {
   await cancelOrderWork(userId, provider)
   const filter = { userId, provider, ...(connectionId ? { connectionId } : {}) }
+  // Buffered writes are flushed first so nothing lands after the delete.
+  await drainBufferedOrderWrites()
   await Promise.all([OrderScan.deleteMany(filter), OrderReceipt.deleteMany(filter), OrderEvent.deleteMany(filter)])
 }

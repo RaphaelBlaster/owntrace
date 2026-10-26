@@ -9,6 +9,7 @@ import MicrosoftConnection from '../models/microsoft-connection.model.js'
 import { classifyBatch, extractCards, sanitizeMetadata, ORDER_POLICY_VERSION, orderProviderConfigured } from './order-processing.service.js'
 import { fetchOrderPage, hashOrderValue } from './order-mail.service.js'
 import { registerOrderWork, releaseOrderWork } from './order-control.service.js'
+import { createOrderWriteBatch, findPendingReceipt } from './order-write-batch.service.js'
 import AppError from '../utils/app-error.js'
 import { logEvent } from '../utils/logger.js'
 
@@ -96,17 +97,18 @@ export async function processOrderScan(scanId) {
       const input = sanitizeMetadata({ ...message, occurredAt: date.toISOString() })
       if (scan.filterDomain && input?.senderDomain !== scan.filterDomain && !input?.senderDomain.endsWith('.' + scan.filterDomain)) { skipped++; continue }
       const fingerprint = hashOrderValue(scan.userId, scan.provider, scan.connectionId, JSON.stringify(input))
+      // A receipt buffered in Redis has not reached Mongo yet; it still dedupes.
+      if (findPendingReceipt(scope, fingerprint, ORDER_POLICY_VERSION)) { skipped++; continue }
       if (await OrderReceipt.exists({ ...scope, fingerprint, policyVersion: ORDER_POLICY_VERSION, expiresAt: { $gt: new Date() } })) { skipped++; continue }
       candidates.push({ scope, input, fingerprint })
     }
-    async function receipt(item, outcome) {
-      await guard()
-      await OrderReceipt.updateOne(item.scope, { $set: { fingerprint: item.fingerprint, outcome, policyVersion: ORDER_POLICY_VERSION, expiresAt: new Date(Date.now() + 90 * DAY) } }, { upsert: true })
-    }
+    // Receipts are accumulated with events and flushed once per provider page.
+    const writes = createOrderWriteBatch()
+    const receipt = (item, outcome) => writes.receipt(item.scope, outcome, { fingerprint: item.fingerprint, policyVersion: ORDER_POLICY_VERSION, expiresAt: new Date(Date.now() + 90 * DAY) })
     for (let offset = 0; offset < candidates.length; offset += 5) {
       await guard()
       const slice = candidates.slice(offset, offset + 5)
-      for (const item of slice.filter(item => !item.input)) { await receipt(item, 'skipped'); skipped++ }
+      for (const item of slice.filter(item => !item.input)) { receipt(item, 'skipped'); skipped++ }
       const batch = slice.filter(item => item.input)
       if (!batch.length) continue
       await modelBudget(scan.userId, batch.map(item => item.input), false)
@@ -116,21 +118,23 @@ export async function processOrderScan(scanId) {
       for (const [index, classification] of classifications.entries()) {
         const item = batch[index]
         if (classification === 'order') orders.push(item)
-        else { await receipt(item, classification); classification === 'review' ? reviewed++ : skipped++ }
+        else { receipt(item, classification); classification === 'review' ? reviewed++ : skipped++ }
       }
       if (!orders.length) continue
       await modelBudget(scan.userId, orders.map(item => item.input), true)
       await guard()
       const cards = await extractCards(orders.map(item => item.input), signal)
       for (const [index, card] of cards.entries()) {
-        await guard()
         const item = orders[index]
-        if (!card) { await receipt(item, 'review'); reviewed++; continue }
-        await OrderEvent.updateOne(item.scope, { $set: { ...card, fingerprint: item.fingerprint, occurredAt: new Date(item.input.occurredAt), policyVersion: ORDER_POLICY_VERSION } }, { upsert: true, runValidators: true })
-        await receipt(item, 'order'); stored++
+        if (!card) { receipt(item, 'review'); reviewed++; continue }
+        writes.event(item.scope, { ...card, fingerprint: item.fingerprint, occurredAt: new Date(item.input.occurredAt), policyVersion: ORDER_POLICY_VERSION })
+        receipt(item, 'order'); stored++
       }
     }
     await guard()
+    // Flush events before receipts and before advancing counters: a failed
+    // write leaves the page uncounted and no message marked deduplicated.
+    await writes.flush()
     const processed = scan.processed + page.messages.length
     const status = page.cursor ? processed >= scan.limit ? 'PAUSED' : 'QUEUED' : 'COMPLETED'
     await OrderScan.updateOne(owned, { $set: { status, cursor: page.cursor, leaseId: null, leaseUntil: null, lastErrorCode: status === 'PAUSED' ? 'ORDER_RUN_LIMIT' : null, ...(status === 'COMPLETED' && !scan.filterDomain ? { checkpointAt: scan.until } : {}) }, $inc: { processed: page.messages.length, examined: candidates.length, stored, reviewed, skipped } })
@@ -153,6 +157,7 @@ export async function enqueueDaily() {
 }
 export function startOrderWorker() {
   let stopping = false, running = false, current = Promise.resolve()
+  // Scan scheduling stays in Mongo; Redis only buffers derived-metadata writes.
   async function tick() {
     if (stopping || running) return
     running = true

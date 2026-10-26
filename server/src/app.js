@@ -8,7 +8,9 @@ import { errorHandler, notFoundHandler } from './middleware/error.middleware.js'
 import requestContext from './middleware/request-context.middleware.js'
 import {
   apiRateLimiter,
+  mailStatusRateLimiter,
   createCorsOptions,
+  providerNotificationRateLimiter,
   requireTrustedOrigin,
 } from './middleware/security.middleware.js'
 import accountRouter from './routes/account.routes.js'
@@ -22,6 +24,8 @@ import privacyFeatureRouter from './routes/privacy-feature.routes.js'
 import microsoftRouter from './routes/microsoft.routes.js'
 import traceRouter from './routes/trace.routes.js'
 import orderRouter from './routes/order.routes.js'
+import providerNotificationsRouter from './routes/provider-notifications.routes.js'
+import topKRouter from './routes/top-k.routes.js'
 
 const app = express()
 const runtime = getRuntimeConfig()
@@ -30,11 +34,18 @@ const clientDistUrl = new URL('../../client/dist/', import.meta.url)
 app.disable('x-powered-by')
 app.set('trust proxy', runtime.trustProxy)
 app.use(requestContext)
-app.use(helmet({ hsts: process.env.NODE_ENV === 'production' ? undefined : false }))
+app.use(helmet({
+  hsts: process.env.NODE_ENV === 'production' ? undefined : false,
+  contentSecurityPolicy: { directives: { imgSrc: ["'self'", 'data:', 'https://icons.duckduckgo.com'] } },
+}))
 app.use(cors(createCorsOptions()))
-app.use('/api', apiRateLimiter)
 app.use(express.json({ limit: '100kb' }))
 app.use(cookieParser())
+// Provider webhooks authenticate with their own challenge/client-state checks,
+// not browser Origin headers or an OwnTrace session cookie.
+app.use('/api/provider-notifications', providerNotificationRateLimiter, providerNotificationsRouter)
+app.use('/api', apiRateLimiter)
+app.use('/api', mailStatusRateLimiter)
 app.use(requireTrustedOrigin)
 
 app.use('/api/health', healthRouter)
@@ -47,6 +58,7 @@ app.use('/api/account-actions', accountActionRouter)
 app.use('/api/identity', identityRouter)
 app.use('/api/trace', traceRouter)
 app.use('/api/orders', orderRouter)
+app.use('/api/top-k', topKRouter)
 app.use('/api', privacyFeatureRouter)
 
 if (runtime.nodeEnvironment === 'production') {

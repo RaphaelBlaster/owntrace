@@ -13,6 +13,7 @@ import MicrosoftSubscription from '../models/microsoft-subscription.model.js'
 import MicrosoftSyncJob from '../models/microsoft-sync-job.model.js'
 import Session from '../models/session.model.js'
 import User from '../models/user.model.js'
+import { drainBufferedOrderWrites } from './order-write-buffer.service.js'
 import AppError from '../utils/app-error.js'
 import { revokeGoogleAccessForUser } from './google-oauth.service.js'
 import { disconnectMicrosoft } from './microsoft-oauth.service.js'
@@ -96,6 +97,10 @@ async function deleteUserAccount(userId, password) {
 
   const { cancelOrderWork } = await import('./order-control.service.js')
   await cancelOrderWork(userId)
+  const { removeTopKSource } = await import('./top-k.service.js')
+  await removeTopKSource(userId)
+  // Flush buffered writes first so a queued page cannot resurrect deleted data.
+  await drainBufferedOrderWrites()
   const orderModels = await Promise.all(['order-event','order-scan','order-preference','order-receipt'].map(name => import(`../models/${name}.model.js`)))
   const { default: OrderBudget } = await import('../models/order-budget.model.js')
   await Promise.all([

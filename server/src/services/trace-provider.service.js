@@ -2,6 +2,9 @@ import AppError from '../utils/app-error.js'
 import { setTimeout as delay } from 'node:timers/promises'
 import { logEvent } from '../utils/logger.js'
 
+const isContentFilter = error => error?.code === 'content_filter' || error?.type === 'content_filter_error'
+const filteredResponse = () => new AppError('The AI provider declined this request.', 422, 'TRACE_PROVIDER_CONTENT_FILTER')
+
 async function requestCompletion(url, options) {
   for(let attempt=1;attempt<=2;attempt++) {
     options.signal.throwIfAborted()
@@ -61,8 +64,10 @@ async function traceCompletion(messages, tools, signal, onText, pinnedConfig, op
   }
   if (!response?.ok) throw new AppError(response?.status === 429 ? `${config.label} is busy. Try again shortly.` : `${config.label} could not complete this request. Check the server model and credential.`, 502, 'TRACE_PROVIDER_ERROR')
   if (onText && response.headers.get('content-type')?.includes('text/event-stream')) return readProviderStream(response, signal, onText)
-  let message
-  try { message = (await response.json()).choices?.[0]?.message } catch { /* sanitized error below */ }
+  let body
+  try { body = await response.json() } catch { /* sanitized error below */ }
+  if (isContentFilter(body?.error) || body?.choices?.[0]?.finish_reason === 'content_filter') throw filteredResponse()
+  const message = body?.choices?.[0]?.message
   if (!message || (typeof message.content !== 'string' && !Array.isArray(message.tool_calls))) throw new AppError('The AI provider returned an unsupported response.', 502, 'TRACE_PROVIDER_ERROR')
   if (onText && message.content) onText(message.content)
   return message
@@ -87,9 +92,11 @@ async function readProviderStream(response, signal, onText) {
         if (data === '[DONE]') { finished = true; break }
         let item
         try { item = JSON.parse(data) } catch { throw new AppError('The AI provider returned an invalid stream.', 502, 'TRACE_PROVIDER_ERROR') }
+        if (isContentFilter(item.error)) throw filteredResponse()
         if (item.error) throw new AppError('The AI provider could not finish this response.', 502, 'TRACE_PROVIDER_ERROR')
         const choice = item.choices?.[0], delta = choice?.delta
-        if (choice?.finish_reason === 'length' || choice?.finish_reason === 'content_filter') throw new AppError('The AI provider could not return a complete answer. Please ask a narrower question.', 502, 'TRACE_PROVIDER_ERROR')
+        if (choice?.finish_reason === 'content_filter') throw filteredResponse()
+        if (choice?.finish_reason === 'length') throw new AppError('The AI provider could not return a complete answer. Please ask a narrower question.', 502, 'TRACE_PROVIDER_ERROR')
         if (typeof delta?.content === 'string') { content += delta.content; onText(delta.content) }
         for (const part of delta?.tool_calls || []) {
           if (!Number.isInteger(part.index) || part.index < 0 || part.index > 5) throw new AppError('Invalid AI tool stream.', 502, 'TRACE_PROVIDER_ERROR')

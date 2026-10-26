@@ -1,11 +1,12 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { google } from 'googleapis'
+import * as googlePush from '../src/services/google-push.service.js'
 import request from 'supertest'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import app from '../src/app.js'
 import { TOKEN_AUDIENCE, TOKEN_ISSUER, getJwtSecret } from '../src/config/auth.js'
-import { GMAIL_METADATA_SCOPE } from '../src/config/google.js'
+import { GMAIL_BODY_SCOPE, GMAIL_METADATA_SCOPE } from '../src/config/google.js'
 import { requireTrustedOrigin } from '../src/middleware/security.middleware.js'
 import AccountAction from '../src/models/account-action.model.js'
 import AccountEvidence from '../src/models/account-evidence.model.js'
@@ -608,7 +609,7 @@ describe('authentication API', () => {
       expect(status.body.google.connection).not.toHaveProperty('encryptedRefreshToken')
       expect(status.body.google.connection).toMatchObject({
         email: 'google-user@example.com',
-        status: 'CONNECTED',
+        status: 'SYNCING',
       })
       expect(status.body.google.capabilities).toMatchObject({
         confirmed: [
@@ -641,6 +642,31 @@ describe('authentication API', () => {
       expect((await User.findOne({ email: validRegistration.email })).authProviders).toEqual([
         'password',
       ])
+    })
+
+    it('requests Gmail body scope only for body consent and skips the initial metadata scan', async () => {
+      const agent = request.agent(app)
+      const registration = await agent.post('/api/auth/register').send(validRegistration).expect(201)
+      const start = await agent.get('/api/google/oauth/start?access=body').expect(302)
+      const authorizationUrl = new URL(start.headers.location)
+      expect(authorizationUrl.searchParams.get('scope').split(' ')).toContain(GMAIL_BODY_SCOPE)
+      const state = authorizationUrl.searchParams.get('state')
+      const ensurePush = vi.spyOn(googlePush, 'ensureGmailPush')
+      vi.spyOn(google.auth.OAuth2.prototype, 'getToken').mockResolvedValue({ tokens: {
+        access_token: 'google-body-access-token', expiry_date: Date.now() + 3_600_000,
+        id_token: 'signed-google-id-token', refresh_token: 'google-body-refresh-token',
+        scope: `openid email ${GMAIL_METADATA_SCOPE} ${GMAIL_BODY_SCOPE}`,
+      } })
+      vi.spyOn(google.auth.OAuth2.prototype, 'verifyIdToken').mockResolvedValue({ getPayload: () => ({
+        email: validRegistration.email, email_verified: true, sub: 'stable-google-account-id',
+      }) })
+      const callback = await agent.get(`/api/google/oauth/callback?code=body-code&state=${encodeURIComponent(state)}`).expect(302)
+      expect(callback.headers.location).toBe('http://localhost:5173/top-k?google=connected')
+      const connection = await GoogleConnection.findOne({ userId: registration.body.user.id })
+      expect(connection.scopes).toContain(GMAIL_BODY_SCOPE)
+      expect(connection.status).toBe('CONNECTED')
+      expect(ensurePush).not.toHaveBeenCalled()
+      expect(await GmailSyncJob.countDocuments({ userId: registration.body.user.id })).toBe(0)
     })
 
     it('handles a denied provider consent without creating a connection', async () => {

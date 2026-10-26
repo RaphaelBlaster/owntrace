@@ -10,12 +10,15 @@ const googleConnectionSchema = new mongoose.Schema(
       index: true,
     },
     googleAccountId: { type: String, required: true },
-    email: { type: String, required: true, lowercase: true, trim: true },
+    email: { type: String, required: true, lowercase: true, trim: true, index: true },
     scopes: { type: [String], default: [] },
     encryptedAccessToken: { type: String, required: true, select: false },
     encryptedRefreshToken: { type: String, required: true, select: false },
     tokenExpiresAt: { type: Date, required: true },
     refreshTokenExpiresAt: { type: Date, default: null },
+    pushStatus: { type: String, enum: ['DISABLED', 'PENDING', 'ACTIVE', 'ERROR'], default: 'DISABLED' },
+    pushExpiresAt: { type: Date, default: null },
+    pushErrorCode: { type: String, default: null },
     connectedAt: { type: Date, default: Date.now },
     lastSyncAt: { type: Date, default: null },
     status: {
@@ -36,6 +39,7 @@ const googleConnectionSchema = new mongoose.Schema(
         delete returnedObject.googleAccountId
         delete returnedObject.encryptedAccessToken
         delete returnedObject.encryptedRefreshToken
+        delete returnedObject.pushErrorCode
         return returnedObject
       },
     },

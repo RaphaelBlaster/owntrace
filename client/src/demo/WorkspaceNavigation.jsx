@@ -9,7 +9,7 @@ import Dock from './react-bits/Dock.jsx'
 import FlowingMenu from './react-bits/FlowingMenu.jsx'
 import TechText from './react-bits/TechText.jsx'
 import StatusMark from './react-bits/StatusMark.jsx'
-const workspaceNavigation = live => live ? navigation.map(group => group.title === 'WORKSPACE' ? { ...group, items: [...group.items, ['Orders', 'orders', 'accounts']] } : group) : navigation
+const workspaceNavigation = live => live ? navigation.map(group => group.title === 'WORKSPACE' ? { ...group, items: [...group.items, ['Orders', 'orders', 'accounts'], ['Top K', 'top-k', 'spark']] } : group) : navigation
 
 export function PrismWordmark() {
   const reduced = useReducedMotion()
