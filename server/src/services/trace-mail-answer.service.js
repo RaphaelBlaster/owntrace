@@ -1,31 +1,57 @@
-const statusLabels = { application_received: 'Application received', assessment: 'Assessment', interview: 'Interview', offer: 'Offer', rejected: 'Rejected', withdrawn: 'Withdrawn', unknown: 'Unspecified' }
-const text = value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 160)
-const status = value => statusLabels[value] || text(value).replaceAll('_', ' ') || 'Unspecified'
-const distribution = counts => Object.entries(counts || {}).filter(([, count]) => Number.isInteger(count) && count > 0).map(([key, count]) => `${status(key)}: ${count}`).join('; ') || 'No classified statuses in these matching saved records.'
+const clean = value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 160)
+const redacted = value => /\[(?:phone|email|link|auth code)\]/i.test(value || '')
+const labels = {
+  application_received: ['application confirmation', 'application confirmations', 'application received'],
+  rejected: ['rejection update', 'rejection updates', 'rejected'],
+  interview: ['interview update', 'interview updates', 'interview update'],
+  assessment: ['assessment', 'assessments', 'assessment'],
+  offer: ['offer update', 'offer updates', 'offer received'],
+  withdrawn: ['withdrawal update', 'withdrawal updates', 'withdrawn'],
+}
+const join = items => items.length < 2 ? items[0] : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
+const covers = (a, b) => (!a.category || a.category === b.category) && (a.search || '') === (b.search || '') && (a.kind === 'all' || a.kind === b.kind) && (!a.status || a.status === b.status)
 
-// Personal mail facts come directly from owned query results, never generated prose.
-export function renderTraceMailAnswer(results) {
-  return results.map(({ query, data }) => {
-    const { counts, pagination, scan, insights } = data
-    const kind = query.kind === 'applications' ? 'application' : query.kind === 'opportunities' ? 'opportunity' : query.category === 'jobs' ? 'job-related' : 'mail'
-    const lines = [
-      `Saved ${kind} email records${query.status ? ` filtered to ${status(query.status)}` : ''}${query.search ? ` matching “${text(query.search)}”` : ''}:`,
-      `${pagination.total} matching record groups from ${counts.messages} messages. ${counts.applications} groups are linked by application reference or thread; this is not a verified application count.`,
-      `${counts.applicationResults || 0} matching groups contain application-related updates; ${counts.opportunities || 0} are opportunity alerts or invitations. These are distinct from a unique-application total.`,
-      `Latest saved status across all matching groups: ${distribution(counts.currentStatuses)}`,
-      `Historical saved events across all matching groups: ${distribution(counts.eventStatuses)}`,
-    ]
-    if (counts.unresolved) lines.push(`${counts.unresolved} matching job messages have ambiguous application linkage; they are not established as distinct applications.`)
-    if (scan.unresolvedMessages > (counts.unresolved || 0)) lines.push(`${scan.unresolvedMessages} job messages across the saved scan have ambiguous linkage, including messages outside this filter.`)
-    if (counts.enrichmentPending) lines.push(`${counts.enrichmentPending} saved job messages have not received the latest company/application enrichment. Missing status information cannot establish that no updates exist.`)
-    if (['QUEUED', 'RUNNING'].includes(scan.enrichmentStatus)) lines.push(`Company/application enrichment is ${scan.enrichmentStatus.toLowerCase()}; ${scan.enrichmentProcessed || 0} messages checked in that pass.`)
-    if (scan.status !== 'COMPLETED') lines.push(`Scan coverage is ${String(scan.status || 'NOT_SCANNED').toLowerCase().replaceAll('_', ' ')}: ${scan.processed || 0} of at most ${scan.limit || 250} inbox messages checked.`)
-    else lines.push(`Scan window: ${scan.processed} inbox messages checked, with a limit of ${scan.limit || 250}. This does not establish complete application history.`)
-    if (insights.length) {
-      lines.push(`Examples from page ${pagination.page} of ${pagination.pages} (${insights.length} of ${pagination.total} matching groups):`)
-      for (const item of insights) lines.push(`• ${text(item.company?.name) || 'Company not identified'}${item.role ? ` — ${text(item.role)}` : ''}: ${status(item.status)}; ${item.messageCount} saved email event${item.messageCount === 1 ? '' : 's'}${item.match === 'unresolved' && item.kind !== 'opportunity' ? '; application linkage unresolved' : ''}.`)
+// Facts remain server-owned; overlapping tool lookups should not become repeated reports.
+export function renderTraceMailAnswer(results, detail = 'medium') {
+  const primary = results.filter((item, index) => !results.some((other, otherIndex) => otherIndex !== index && covers(other.query, item.query) && (!covers(item.query, other.query) || otherIndex < index)))
+  const paragraphs = primary.map(({ query, data }) => {
+    const { counts, scan } = data
+    const recommendations = query.kind === 'opportunities'
+    const kind = recommendations ? 'job recommendations' : query.kind === 'applications' ? 'application-related emails' : query.category === 'jobs' ? 'job-related emails' : 'relevant emails'
+    const scope = query.search ? ` matching “${clean(query.search)}”` : ''
+    const window = scan.status === 'COMPLETED' ? ` in your latest ${scan.processed} inbox emails` : ' in the saved results available so far'
+    if (scan.status === 'NOT_SCANNED') return 'I haven’t analyzed your mailbox yet, so I can’t tell which applications have received replies.'
+    if (!counts.messages) return `I haven’t found any saved ${query.status ? clean(query.status).replaceAll('_', ' ') + ' updates' : kind}${scope} in this window. That doesn’t establish that you received no replies.`
+    const lines = [`I found ${counts.messages} ${counts.messages === 1 ? kind.replace(/emails$/, 'email').replace(/recommendations$/, 'recommendation') : kind}${scope}${window}${query.status ? ` with a latest saved status of ${labels[query.status]?.[2] || clean(query.status).replaceAll('_', ' ')}` : ''}.`]
+    if (!recommendations) {
+      const statuses = counts.eventStatuses || counts.currentStatuses || {}
+      const parts = Object.entries(labels).filter(([key]) => statuses[key] > 0).map(([key, words]) => `${statuses[key]} ${words[statuses[key] === 1 ? 0 : 1]}`)
+      if (parts.length) lines.push(`The messages include ${join(parts)}.`)
+      if (query.kind === 'all' && counts.opportunities) lines.push(`Those results include ${counts.opportunities} job recommendations, rather than application confirmations.`)
     }
-    lines.push('These are email-derived findings, not employer-verified statuses. Open Top K to inspect the evidence and further pages.')
-    return lines.join('\n')
-  }).join('\n\n')
+    const examples = new Map()
+    const lookups = results.filter(item => covers(query, item.query)).sort((a, b) => Number(Boolean(b.query.status)) - Number(Boolean(a.query.status)))
+    const items = lookups.flatMap(lookup => lookup.data.insights).sort((a, b) => Number(b.status !== 'unknown') - Number(a.status !== 'unknown'))
+    for (const item of items) {
+      const company = clean(item.company?.name), role = redacted(item.role) ? '' : clean(item.role)
+      const name = company ? `${company}${role ? ` — ${role}` : ''}` : role ? `${role} (company not identified)` : redacted(item.title) ? 'An email with no identified company' : clean(item.title) || 'An email with no identified company'
+      const status = item.kind === 'opportunity' ? 'job recommendation' : labels[item.status]?.[2] || 'status isn’t clear yet'
+      if (company && !role && [...examples.keys()].some(key => key.startsWith(company + ' — ') && key.endsWith(':' + status))) continue
+      if (company && role) examples.delete(`${company}:${status}`)
+      examples.set(`${name}:${status}`, `• ${name}: ${status}.`)
+    }
+    const shown = [...examples.values()].slice(0, detail === 'low' ? 1 : detail === 'high' ? 5 : 3)
+    if (shown.length) lines.push(`A few examples:\n${shown.join('\n')}`)
+    return lines.join('\n\n')
+  })
+  const scans = results.map(item => item.data.scan), counts = results.map(item => item.data.counts)
+  const notes = []
+  if (scans.some(scan => ['QUEUED', 'RUNNING'].includes(scan.status) || ['QUEUED', 'RUNNING'].includes(scan.enrichmentStatus))) notes.push('Some messages are still being analyzed, so this summary may change.')
+  else if (counts.some(count => count.enrichmentPending)) notes.push('Some messages still need review.')
+  if (counts.some(count => count.unresolved) || scans.some(scan => scan.unresolvedMessages)) notes.push('Some updates couldn’t be linked to an application.')
+  if (results.some(item => item.query.kind !== 'opportunities' && item.data.counts.applicationResults)) notes.push('These are email updates, not a count of separate applications.')
+  if (notes.length) paragraphs.push(notes.join(' '))
+  paragraphs.push('Open Jobs below to see the full list and evidence.')
+  if (!results.some(item => item.query.status === 'rejected') && primary.some(item => !item.query.status && (item.data.counts.eventStatuses?.rejected || item.data.counts.currentStatuses?.rejected))) paragraphs.push('Would you like me to show just the rejections?')
+  return paragraphs.join('\n\n')
 }

@@ -126,7 +126,7 @@ describe('TRACE saved application retrieval', () => {
     const { fetch, bodies } = mockMercury({ final: 'Saved analysis is incomplete; I cannot conclude there are no applications.' })
     vi.stubGlobal('fetch', fetch)
     const result = await answerTrace(userId, [], 'Do I have rejected applications?', new AbortController().signal, undefined, async () => {}, getTraceProviderConfig())
-    expect(result.content).toContain('Scan coverage is '+status.toLowerCase().replaceAll('_', ' '))
+    expect(result.content).toContain(status === 'NOT_SCANNED' ? 'haven’t analyzed your mailbox yet' : 'still being analyzed')
     expect(result.content).not.toContain('no applications')
   })
 
@@ -138,8 +138,8 @@ describe('TRACE saved application retrieval', () => {
     const { fetch, bodies } = mockMercury({ final: 'Some job messages still need classification; no confirmed rejection is saved.' })
     vi.stubGlobal('fetch', fetch)
     const result = await answerTrace(userId, [], 'Have I applied anywhere?', new AbortController().signal, undefined, async () => {}, getTraceProviderConfig())
-    expect(result.content).toContain('1 job messages across the saved scan have ambiguous linkage')
-    expect(result.content).toContain('1 saved job messages have not received')
+    expect(result.content).toContain('couldn’t be linked to an application')
+    expect(result.content).toContain('still need review')
   })
 
   it('grounds status answers across the saved result set instead of only the first page', async () => {
@@ -152,9 +152,9 @@ describe('TRACE saved application retrieval', () => {
     const { fetch, bodies } = mockMercury({ afterPlan: () => new Response(JSON.stringify({ choices: [{ message: { tool_calls: [{ id: 'query', type: 'function', function: { name: 'query_mail_insights', arguments: JSON.stringify({ category: 'jobs', status: '', search: '', page: 1, kind: 'applications' }) } }] } }] })) })
     vi.stubGlobal('fetch', fetch)
     const result = await answerTrace(userId, [], 'Show my jobs and any rejections.', new AbortController().signal, undefined, async () => {}, getTraceProviderConfig())
-    expect(result.content).toContain('Rejected: 1')
-    expect(result.content).toContain('6 of 7 matching groups')
-    expect(result.content).toContain('not a verified application count')
+    expect(result.content).toContain('1 rejection update')
+    expect(result.content).toContain('7 application-related emails')
+    expect(result.content).toContain('not a count of separate applications')
     expect(result.sources).toEqual([{ label: 'Saved email insights', action: { type: 'navigate_to_page', page: 'top-k' } }])
   })
 
@@ -167,8 +167,8 @@ describe('TRACE saved application retrieval', () => {
     vi.stubGlobal('fetch', fetch)
     const onEvent = vi.fn()
     const result = await answerTrace(userId, [], 'Show applications and interview replies.', new AbortController().signal, onEvent, async () => {}, getTraceProviderConfig())
-    expect(result.content).toContain('Interview: 1')
-    expect(result.content).toContain('Acme — Engineer: Interview')
+    expect(result.content).toContain('1 interview update')
+    expect(result.content).toContain('Acme — Engineer: interview update')
     expect(result.content).not.toContain(fabricated)
     expect(result.content).not.toContain('FakeCorp')
     expect(onEvent).toHaveBeenCalledWith('delta', { text: result.content })

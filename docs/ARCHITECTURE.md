@@ -51,7 +51,7 @@ TRACE uses Mercury for retrieval planning and validated read-only tool selection
 
 Every personal-record turn retrieves current saved data. Tool-family coverage prevents finalizing a planned records answer without its matching lookup. Failed retrieval is distinct from a successful empty result; incomplete scans and uncertain linkage remain explicit limitations.
 
-For job-result lookups, a server-owned formatter renders actual result counts, full saved status distributions, page examples and scan/enrichment coverage. Model-generated personal job prose is not emitted on this path. General explanations and other workspace answers retain the model answer path with retrieved facts. Supported navigation actions open existing owned pages; consequential actions use their actual UI confirmation.
+For job-result lookups, a server-owned formatter produces a concise conversational summary from actual message counts, status totals and a few relevant examples. Overlapping lookups are combined; scan limits and uncertainty are explained briefly instead of dumping internal diagnostics. Model-generated personal job prose is not emitted on this path. General explanations and other workspace answers retain the model answer path with retrieved facts. Supported navigation actions open existing owned pages; consequential actions use their actual UI confirmation.
 
 ## Rate limiting
 

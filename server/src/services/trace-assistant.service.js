@@ -45,7 +45,7 @@ async function runTrace(userId, history, content, signal, onEvent, checkConsent,
     signal.throwIfAborted()
     if (checkConsent) await checkConsent()
     if (mailResults.length) {
-      const content = renderTraceMailAnswer(mailResults)
+      const content = renderTraceMailAnswer(mailResults, responseDetail)
       onEvent?.('delta', { text: content })
       return { role: 'assistant', content, sources: [...new Map(sources.map(item => [JSON.stringify(item.action), item])).values()].slice(0, 30), actions: [...new Map(actions.map(item => [JSON.stringify(item), item])).values()], grounding, createdAt: new Date() }
     }
