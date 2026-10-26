@@ -26,7 +26,7 @@ it('completes the filtered jobs followup with a safe page reference and location
   expect(result.content).toMatch(/location/i)
   expect(result.content).toMatch(/provider declined/i)
   expect(result.content).not.toContain('PRIVATE OLD RECORD TEXT')
-  expect(result.sources).toEqual([{ label: 'Saved email insights', action: { type: 'navigate_to_page', page: 'top-k' } }])
+  expect(result.sources).toEqual([{ label: 'Application updates', action: { type: 'show_mail_insights', category: 'jobs', kind: 'applications', status: '', search: '', page: 1 } }])
   expect(result.actions).toEqual([])
   expect(event).toHaveBeenCalledWith('delta', { text: result.content })
   expect(consent).toHaveBeenCalled()

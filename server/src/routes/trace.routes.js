@@ -58,6 +58,10 @@ router.post('/resolve-action', async (request, response) => {
   const action = request.body
   if (!action || typeof action.type !== 'string') throw new AppError('Invalid navigation action.', 400, 'INVALID_TRACE_TOOL')
   const { type, ...args } = action
+  if (type === 'show_mail_insights') {
+    const result = await executeTraceTool(request.auth.userId, 'query_mail_insights', args)
+    return response.json({ actions: [result.sources[0].action] })
+  }
   if (!['navigate_to_page', 'open_account', 'show_subscriptions', 'focus_entity','close_preview'].includes(type)) throw new AppError('Unsupported navigation action.', 400, 'INVALID_TRACE_TOOL')
   const result = await executeTraceTool(request.auth.userId, type, args)
   response.json({ actions: result.actions })

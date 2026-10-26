@@ -53,6 +53,32 @@ function mockMercury({ plan = ['applications'], afterPlan, afterQuery, final = '
 }
 
 describe('TRACE saved application retrieval', () => {
+  it('opens the same owned filters used by the answer instead of an unfiltered page', async () => {
+    const owner = await session('exact-preview@example.com'), other = await session('exact-preview-other@example.com')
+    await scan(owner.userId); await scan(other.userId)
+    await jobInsight(owner.userId); await jobInsight(other.userId, { companyName: 'Foreign Co' })
+    const query = { category: 'jobs', kind: 'applications', status: 'rejected', search: 'Acme', page: 1 }
+    const expected = { type: 'show_mail_insights', ...query }
+    const result = await executeTraceTool(owner.userId, 'query_mail_insights', query)
+    expect(result.sources[0].action).toEqual(expected)
+    expect(result.data.insights).toHaveLength(1)
+    const resolved = await owner.agent.post('/api/trace/resolve-action').send(expected).expect(200)
+    expect(resolved.body.actions).toEqual([expected])
+    const view = await owner.agent.get('/api/top-k/groups').query({ ...query, limit: 6 }).expect(200)
+    expect(view.body.counts).toEqual(result.data.counts)
+    await owner.agent.post('/api/trace/resolve-action').send({ ...expected, userId: other.userId }).expect(400)
+    await owner.agent.post('/api/trace/resolve-action').send({ ...expected, url: 'https://evil.example' }).expect(400)
+  })
+
+  it('uses the retrieved mail filters when the assistant opens the live Top K preview', async () => {
+    const { userId } = await session('auto-preview@example.com')
+    await scan(userId); await jobInsight(userId)
+    const { fetch } = mockMercury({ afterQuery: () => new Response(JSON.stringify({ choices: [{ message: { tool_calls: [{ id: 'show', type: 'function', function: { name: 'finish_answer', arguments: JSON.stringify({ presentation: 'preview', view: 'top-k', entityId: '' }) } }] } }] })) })
+    vi.stubGlobal('fetch', fetch)
+    const result = await answerTrace(userId, [], 'Show my rejected applications in the browser.', new AbortController().signal, undefined, undefined, getTraceProviderConfig())
+    expect(result.actions).toEqual([{ type: 'show_mail_insights', category: 'jobs', kind: 'applications', status: 'rejected', search: '', page: 1 }])
+  })
+
   it('includes current Top K scan status without exposing its cursor or lease', async () => {
     const { userId } = await session('trace-topk-status@example.com')
     await scan(userId, { status: 'RUNNING', processed: 25 })
@@ -155,7 +181,7 @@ describe('TRACE saved application retrieval', () => {
     expect(result.content).toContain('1 rejection update')
     expect(result.content).toContain('7 application-related emails')
     expect(result.content).toContain('not a count of separate applications')
-    expect(result.sources).toEqual([{ label: 'Saved email insights', action: { type: 'navigate_to_page', page: 'top-k' } }])
+    expect(result.sources).toEqual([{ label: 'Application updates', action: { type: 'show_mail_insights', category: 'jobs', kind: 'applications', status: '', search: '', page: 1 } }])
   })
 
   it('never emits fabricated model prose after a job-result lookup, including SSE output', async () => {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
+import { Link } from '../workspace/workspace-navigation.jsx'
+import { readTopKQuery } from './top-k-query.js'
 import api from '../../services/api.js'
 import { ActionButton, EmptyResult, ScreenHeader, ServiceIcon, Tag } from '../../demo/components.jsx'
 import './top-k.css'
@@ -79,16 +81,19 @@ export default function TopKPage() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [refreshVersion, setRefreshVersion] = useState(0)
   const [groupViews, setGroupViews] = useState({})
   const [loadingGroups, setLoadingGroups] = useState({})
-  const [limits, setLimits] = useState({})
-  const [jobFilters, setJobFilters] = useState({ search: '', status: '', kind: 'all' })
-  const [jobSearch, setJobSearch] = useState('')
+  const query = readTopKQuery(params)
+  const jobFilters = useMemo(() => ({ search: query.search, status: query.status, kind: query.kind }), [query.search, query.status, query.kind])
+  const [jobSearch, setJobSearch] = useState(query.search)
+  useEffect(() => { setJobSearch(query.search) }, [query.search])
 
   const load = useCallback(async ({ signal } = {}) => {
     try {
       const response = await api.get('/top-k', { params: { k }, signal })
       setData(response.data)
+      setRefreshVersion(value => value + 1)
       setError('')
       return 5000
     } catch (failure) {
@@ -106,9 +111,6 @@ export default function TopKPage() {
 
   const active = ['QUEUED', 'RUNNING'].includes(data?.analysis?.status)
   useEffect(() => {
-    setGroupViews({})
-  }, [active])
-  useEffect(() => {
     if (!active || busy) return undefined
     let timer, controller
     let cancelled = false
@@ -125,8 +127,8 @@ export default function TopKPage() {
     const byCategory = new Map((data?.categories || []).map(category => [category.category, category]))
     return (data?.topCategories || []).map(category => byCategory.get(category)).filter(category => category && important.has(category.category)).slice(0, k)
   }, [data, k])
-  const selectedName = params.get('category') || top[0]?.category || 'jobs'
-  const selectedCategory = data?.categories?.find(category => category.category === selectedName) || top[0]
+  const selectedName = params.has('category') ? query.category : top[0]?.category || 'jobs'
+  const selectedCategory = selectedName === 'all' ? { category: 'all', label: 'All email updates', count: data?.categories?.reduce((sum, category) => sum + category.count, 0) || 0 } : data?.categories?.find(category => category.category === selectedName) || { category: selectedName, label: pretty(selectedName), count: 0 }
   const scansBusy = active || busy
 
   async function changeConsent(enabled) {
@@ -159,86 +161,65 @@ export default function TopKPage() {
     finally { setBusy(false) }
   }
 
-  function categoryLimit(category) { return limits[category] || 6 }
-  function groupKey(category, limit, filters = jobFilters) {
-    return category === 'jobs'
-      ? `${category}:${limit}:${filters.search}:${filters.status}:${filters.kind}`
-      : `${category}:${limit}`
-  }
-  function categoryView(category) {
-    const limit = categoryLimit(category.category)
-    const key = groupKey(category.category, limit)
-    const view = groupViews[key]
-    if (view) return view
-    return { insights: category.items || [], pagination: category.pagination || { page: 1, limit, total: category.count || 0, pages: 1 } }
-  }
-
-  async function fetchGroups(category, { page = 1, limit = categoryLimit(category), filters = jobFilters } = {}) {
-    const key = groupKey(category, limit, filters)
-    setLoadingGroups(current => ({ ...current, [key]: true }))
-    try {
-      const params = { category, page, limit }
-      if (category === 'jobs') {
-        params.kind = filters.kind
-        if (filters.search) params.search = filters.search
-        if (filters.status) params.status = filters.status
+  function updateView(patch) {
+    setParams(current => {
+      const next = new URLSearchParams(current)
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === '') next.delete(key)
+        else next.set(key, String(value))
       }
-      const response = await api.get('/top-k/groups', { params })
-      setGroupViews(current => ({ ...Object.fromEntries(Object.entries(current).filter(([oldKey]) => !oldKey.startsWith(`${category}:`))), [key]: response.data }))
-      setError('')
-    } catch (failure) {
-      setError(messageOf(failure))
-    } finally {
-      setLoadingGroups(current => ({ ...current, [key]: false }))
-    }
+      return next
+    })
   }
+  const fetchGroups = useCallback(async (category, options) => {
+    const { page, limit, filters, signal } = options
+    const key = JSON.stringify([category, limit, filters, page])
+    setLoadingGroups({ [key]: true })
+    try {
+      const response = await api.get('/top-k/groups', { params: { category: category === 'all' ? '' : category, page, limit, ...filters }, signal })
+      if (!signal.aborted) { setGroupViews({ [key]: response.data }); setError('') }
+    } catch (failure) { if (!signal.aborted) setError(messageOf(failure)) }
+    finally { if (!signal.aborted) setLoadingGroups({}) }
+  }, [])
+  const ready = Boolean(data), observedAt = data?.analysis?.observedAt
+  useEffect(() => {
+    if (!ready) return undefined
+    const controller = new AbortController()
+    void fetchGroups(selectedName, { page: query.page, limit: query.limit, filters: jobFilters, signal: controller.signal })
+    return () => controller.abort()
+  }, [ready, selectedName, query.page, query.limit, jobFilters, observedAt, refreshVersion, fetchGroups])
 
-  async function applyJobFilters(event) {
-    event.preventDefault()
-    const next = { ...jobFilters, search: jobSearch.trim() }
-    setJobFilters(next)
-    await fetchGroups('jobs', { page: 1, filters: next })
-  }
-
-  async function changeJobFilter(name, value) {
-    const next = { ...jobFilters, [name]: value }
-    setJobFilters(next)
-    if (name === 'search') setJobSearch(value)
-    await fetchGroups('jobs', { page: 1, filters: next })
-  }
-
-  async function changeCategoryLimit(category, limit) {
-    const next = Number(limit)
-    setLimits(current => ({ ...current, [category]: next }))
-    await fetchGroups(category, { page: 1, limit: next })
-  }
+  function applyJobFilters(event) { event.preventDefault(); updateView({ search: jobSearch.trim(), page: 1 }) }
+  function changeJobFilter(name, value) { updateView({ [name]: value, page: 1 }) }
+  function changeCategoryLimit(_category, limit) { updateView({ limit, page: 1 }) }
 
   function renderCategory(category, rankIndex = null) {
-    const limit = categoryLimit(category.category)
-    const key = groupKey(category.category, limit)
-    const view = categoryView(category)
+    const limit = query.limit
+    const key = JSON.stringify([category.category, limit, jobFilters, query.page])
+    const view = groupViews[key] || { insights: [], pagination: { page: query.page, limit, total: 0, pages: 0 }, pending: true }
     const rows = view.insights || []
     const page = view.pagination?.page || 1
     const pages = Math.max(1, view.pagination?.pages || Math.ceil((view.pagination?.total || 0) / limit))
     const total = view.pagination?.total ?? category.count ?? rows.length
-    const loading = Boolean(loadingGroups[key])
+    const loading = Boolean(view.pending || loadingGroups[key])
     return <article className={`dx-card ot-top-k-category${review.has(category.category) ? ' ot-top-k-reviewed' : ''}`} key={category.category}>
       <header>
         {rankIndex !== null ? <span className="ot-top-k-rank">{String(rankIndex + 1).padStart(2, '0')}</span> : null}
-        <div><h3>{category.label || pretty(category.category)}</h3><p>{total} {category.category === 'jobs' ? 'grouped results' : 'results'}</p></div>
+        <div><h3>{category.label || pretty(category.category)}</h3><p>{view.pending ? 'Loading matching results...' : `${view.counts?.messages ?? total} emails / ${total} results`}</p></div>
         <Tag>{pretty(category.category)}</Tag>
       </header>
-      {category.category === 'jobs' ? <form className="ot-top-k-job-filters" onSubmit={applyJobFilters}>
-        <label>Search jobs <input type="search" value={jobSearch} onChange={event => setJobSearch(event.target.value)} placeholder="Company or role" /></label>
+      <form className="ot-top-k-job-filters" onSubmit={applyJobFilters}>
+        <label>{category.category === 'jobs' ? 'Search jobs' : 'Search updates'} <input type="search" value={jobSearch} onChange={event => setJobSearch(event.target.value)} placeholder="Company or role" /></label>
         <button type="submit" disabled={loading}>Search</button>
         <label>Show <select value={jobFilters.kind} onChange={event => void changeJobFilter('kind', event.target.value)}><option value="all">Applications and job recommendations</option><option value="applications">Applications</option><option value="opportunities">Job recommendations</option></select></label>
-        <label>Status <select value={jobFilters.status} onChange={event => void changeJobFilter('status', event.target.value)}><option value="">All statuses</option><option value="application_received">Received</option><option value="assessment">Assessment</option><option value="interview">Interview</option><option value="offer">Offer</option><option value="rejected">Rejected</option><option value="withdrawn">Withdrawn</option><option value="unknown">Unknown</option></select></label>
-      </form> : null}
+        <label>Status <select value={jobFilters.status} onChange={event => void changeJobFilter('status', event.target.value)}><option value="">All statuses</option><option value="application_received">Received</option><option value="assessment">Assessment</option><option value="interview">Interview</option><option value="offer">Offer</option><option value="rejected">Rejected</option><option value="withdrawn">Withdrawn</option><option value="unknown">Unknown</option><option value="alert">Alert</option><option value="received">Received update</option><option value="confirmed">Confirmed</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="charged">Charged</option><option value="updated">Updated</option></select></label>
+      </form>
+      {view.counts && category.category === 'jobs' && jobFilters.kind !== 'opportunities' ? <div className="ot-top-k-status-totals" aria-label="Saved application status totals">{[['application_received', 'Received'], ['rejected', 'Rejected'], ['interview', 'Interview'], ['assessment', 'Assessment'], ['offer', 'Offer'], ['withdrawn', 'Withdrawn']].filter(([status]) => view.counts.eventStatuses?.[status]).map(([status, label]) => <button key={status} type="button" aria-pressed={jobFilters.status === status} onClick={() => changeJobFilter('status', jobFilters.status === status ? '' : status)}>{label} <strong>{view.counts.eventStatuses[status]}</strong></button>)}</div> : null}
       {rows.length ? <div className="ot-top-k-application-list">{rows.map(item => <ApplicationCard key={item.id} item={item} />)}</div> : <p className="ot-top-k-muted">{loading ? 'Loading results...' : 'No results in this category yet.'}</p>}
       <footer className="ot-top-k-pagination">
-        <label>Per page <select aria-label={`${category.label || category.category} results per page`} value={limit} onChange={event => void changeCategoryLimit(category.category, event.target.value)}><option value={6}>6</option><option value={12}>12</option></select></label>
+        <label>Per page <select aria-label={`${category.label || category.category} results per page`} value={limit} onChange={event => void changeCategoryLimit(category.category, event.target.value)}><option value={6}>6</option><option value={12}>12</option><option value={24}>24</option></select></label>
         <span>Page {page} of {pages}</span>
-        <div><button type="button" disabled={loading || page <= 1} onClick={() => void fetchGroups(category.category, { page: page - 1, limit })}>Previous</button><button type="button" disabled={loading || page >= pages} onClick={() => void fetchGroups(category.category, { page: page + 1, limit })}>Next</button></div>
+        <div><button type="button" disabled={loading || page <= 1} onClick={() => updateView({ page: page - 1 })}>Previous</button><button type="button" disabled={loading || page >= pages} onClick={() => updateView({ page: page + 1 })}>Next</button></div>
       </footer>
     </article>
   }
@@ -282,7 +263,7 @@ export default function TopKPage() {
       <nav className="ot-top-k-category-tabs" aria-label="Top categories">
         {top.map((category, index) => <Link key={category.category} to={`/top-k?category=${category.category}`} aria-current={selectedCategory?.category === category.category ? 'page' : undefined}><span>{String(index + 1).padStart(2, '0')}</span>{category.label}<small>{category.count} messages</small></Link>)}
       </nav>
-      {data ? <label className="ot-top-k-category-select">Browse category <select value={selectedCategory?.category || 'jobs'} onChange={event => setParams({ category: event.target.value })}>{data.categories.map(category => <option key={category.category} value={category.category}>{category.label} ({category.count})</option>)}</select></label> : null}
+      {data ? <label className="ot-top-k-category-select">Browse category <select value={selectedCategory?.category || 'jobs'} onChange={event => updateView({ category: event.target.value, kind: 'all', status: '', search: '', page: 1 })}><option value="all">All email updates</option>{data.categories.map(category => <option key={category.category} value={category.category}>{category.label} ({category.count})</option>)}</select></label> : null}
     </section>
 
     <section className="ot-top-k-single" aria-label="Selected category results">

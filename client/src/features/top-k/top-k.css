@@ -103,3 +103,8 @@
 .ot-top-k-single .ot-top-k-application-identity h4 { white-space: normal; overflow: visible; }
 .ot-top-k-single .ot-top-k-job-filters > label:first-child { flex: 1; }
 .ot-top-k-single .ot-top-k-job-filters input { width: 100%; }
+
+.ot-top-k-status-totals { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.ot-top-k-status-totals button { padding: 8px 12px; border: 1px solid var(--dx-line, #dce3e5); border-radius: 8px; background: var(--dx-surface, white); color: var(--dx-ink, #34474e); cursor: pointer; font: inherit; font-size: 12px; }
+.ot-top-k-status-totals button[aria-pressed="true"] { border-color: var(--dx-accent, #287f95); background: #eaf5f6; }
+.ot-top-k-status-totals strong { margin-left: 7px; }

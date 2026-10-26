@@ -21,7 +21,7 @@ router.get('/groups', async (req, res) => {
   exact(req.query, ['category', 'status', 'search', 'page', 'limit', 'kind'])
   const { category = 'jobs', status = '', search = '', kind = 'all' } = req.query
   const page = Number(req.query.page || 1), limit = Number(req.query.limit || 6)
-  if (!mailCategories.includes(category) || typeof status !== 'string' || status && !/^[a-z_]{1,60}$/.test(status) || typeof search !== 'string' || search.length > 120 || !['all', 'applications', 'opportunities'].includes(kind) || !Number.isInteger(page) || page < 1 || page > 10000 || ![6, 12, 24].includes(limit)) invalid()
+  if ((category !== '' && !mailCategories.includes(category)) || typeof status !== 'string' || status && !/^[a-z_]{1,60}$/.test(status) || typeof search !== 'string' || search.length > 120 || !['all', 'applications', 'opportunities'].includes(kind) || !Number.isInteger(page) || page < 1 || page > 10000 || ![6, 12, 24].includes(limit)) invalid()
   res.json(await queryMailInsights(req.auth.userId, { category, status, search, kind, page, limit }))
 })
 router.put('/consent', async (req, res) => {

@@ -54,7 +54,7 @@ export async function topKState(userId, k) {
     return { ...category, items: grouped.insights, pagination: grouped.pagination, counts: grouped.counts }
   })
   const enriching = ['QUEUED', 'RUNNING'].includes(analysis?.enrichmentStatus)
-  return { ...ranked, connections, analysis: { enabled: Boolean(analysis?.enabled), version: 1, status: enriching ? analysis.enrichmentStatus : analysis?.status || 'IDLE', phase: enriching ? 'enrichment' : 'scan', enrichmentStatus: analysis?.enrichmentStatus || 'IDLE', enrichmentProcessed: analysis?.enrichmentProcessed || 0, provider: analysis?.provider, processed: analysis?.processed || 0, limit: 250, lastErrorCode: analysis?.lastErrorCode || analysis?.enrichmentErrorCode || null }, configured: intelligenceConfigured() }
+  return { ...ranked, connections, analysis: { observedAt: analysis?.updatedAt, enabled: Boolean(analysis?.enabled), version: 1, status: enriching ? analysis.enrichmentStatus : analysis?.status || 'IDLE', phase: enriching ? 'enrichment' : 'scan', enrichmentStatus: analysis?.enrichmentStatus || 'IDLE', enrichmentProcessed: analysis?.enrichmentProcessed || 0, provider: analysis?.provider, processed: analysis?.processed || 0, limit: 250, lastErrorCode: analysis?.lastErrorCode || analysis?.enrichmentErrorCode || null }, configured: intelligenceConfigured() }
 }
 
 export async function stopTopK(userId, provider, { disable = false } = {}) {

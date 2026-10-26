@@ -79,6 +79,13 @@ function validateTool(name, args) {
   }
 }
 const source = (label, action) => ({ label, action })
+function mailInsightAction(query) {
+  const category = query.category ?? 'jobs'
+  const args = { category, kind: query.kind ?? (category === 'jobs' ? 'applications' : 'all'), status: query.status ?? '', search: query.search ?? '', page: query.page ?? 1 }
+  validateTool('query_mail_insights', args)
+  if (!/^[a-z_]{0,60}$/.test(args.status)) throw new AppError('Invalid mail status filter.', 400, 'INVALID_TRACE_TOOL')
+  return { type: 'show_mail_insights', ...args }
+}
 async function executeTraceTool(userId, name, args) {
   validateTool(name, args)
   const sources = [], actions = []
@@ -127,7 +134,8 @@ async function executeTraceTool(userId, name, args) {
   } else if (name === 'query_mail_insights') {
     const { queryMailInsights } = await import('./mail-insight-query.service.js')
     data = await queryMailInsights(userId, args)
-    sources.push(source('Saved email insights', { type: 'navigate_to_page', page: 'top-k' }))
+    const label = args.status ? `${args.status.replaceAll('_', ' ')} updates` : args.kind === 'applications' ? 'Application updates' : args.kind === 'opportunities' ? 'Job recommendations' : 'Email updates'
+    sources.push(source(label.charAt(0).toUpperCase() + label.slice(1), mailInsightAction(args)))
   } else if (['get_order','open_order'].includes(name)) {
     data = await orderDetails(userId, args.orderId)
     sources.push(source(data.order.merchant.name + ' · order evidence', { type: 'open_order', orderId: data.order.id }))
@@ -163,4 +171,4 @@ async function executeTraceTool(userId, name, args) {
   }
   return { coverage:traceToolCoverage(name,args), resultSummary:summarizeTraceResult(data), query:args, data, sources, actions, retrievedAt: new Date().toISOString() }
 }
-export { executeTraceTool, traceTools, traceToolsForCoverage, validateTool, traceToolCoverage, tracePlanTool, validateTracePlan, pages }
+export { executeTraceTool, traceTools, traceToolsForCoverage, validateTool, traceToolCoverage, tracePlanTool, validateTracePlan, pages, mailInsightAction }

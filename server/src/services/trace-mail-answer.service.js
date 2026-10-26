@@ -10,10 +10,11 @@ const labels = {
 }
 const join = items => items.length < 2 ? items[0] : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 const covers = (a, b) => (!a.category || a.category === b.category) && (a.search || '') === (b.search || '') && (a.kind === 'all' || a.kind === b.kind) && (!a.status || a.status === b.status)
+export const mailResultViews = results => results.filter((item, index) => !results.some((other, otherIndex) => otherIndex !== index && covers(other.query, item.query) && (!covers(item.query, other.query) || otherIndex < index)))
 
 // Facts remain server-owned; overlapping tool lookups should not become repeated reports.
 export function renderTraceMailAnswer(results, detail = 'medium') {
-  const primary = results.filter((item, index) => !results.some((other, otherIndex) => otherIndex !== index && covers(other.query, item.query) && (!covers(item.query, other.query) || otherIndex < index)))
+  const primary = mailResultViews(results)
   const paragraphs = primary.map(({ query, data }) => {
     const { counts, scan } = data
     const recommendations = query.kind === 'opportunities'

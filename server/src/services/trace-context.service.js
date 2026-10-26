@@ -13,7 +13,7 @@ function traceReferenceContext(history) {
       for (const family of toolFamilies[item.tool] || []) families.add(family)
       if (item.tool==='retrieval_plan') for (const family of item.query?.requiredFamilies || []) families.add(family)
     }
-    const views=[...new Set((message.actions||[]).map(action=>action.type==='show_subscriptions'?'subscriptions':action.type==='open_account'?'account':action.type==='open_order'?'order':action.type==='close_preview'?'closed':action.type==='focus_entity'?action.entityType:action.type==='navigate_to_page'?action.page:null).filter(view=>allowedViews.has(view))) ]
+    const views=[...new Set((message.actions||[]).map(action=>action.type==='show_subscriptions'?'subscriptions':action.type==='open_account'?'account':action.type==='open_order'?'order':action.type==='show_mail_insights'?'top-k':action.type==='close_preview'?'closed':action.type==='focus_entity'?action.entityType:action.type==='navigate_to_page'?action.page:null).filter(view=>allowedViews.has(view))) ]
     return families.size || views.length ? [{recordFamilies:[...families],views}] : []
   }).slice(-3)
   return {recentUserMessages:history.filter(message=>message.role==='user' && message.status==='completed').slice(-4).map(message=>message.content.slice(0,1000)),recentWorkspaceContext}
