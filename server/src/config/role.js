@@ -2,16 +2,20 @@
 //   all    (default) HTTP API + every background worker in one process
 //   web    HTTP API only; scans, syncs and replays run in the worker role
 //   worker background workers + a loopback-only health endpoint, no API
-const validRoles = new Set(['all', 'web', 'worker'])
+//   api / mail-worker  aliases of web / worker for the split deployment
+//   rag    marker only: compose runs trace-server.js directly for this role
+const aliases = { api: 'web', 'mail-worker': 'worker' }
+const validRoles = new Set(['all', 'web', 'worker', 'api', 'mail-worker', 'rag'])
 
 export function getOwntraceRole() {
   const role = process.env.OWNTRACE_ROLE?.trim().toLowerCase() || 'all'
-  if (!validRoles.has(role)) throw new Error('OWNTRACE_ROLE must be all, web, or worker')
+  if (!validRoles.has(role)) throw new Error('OWNTRACE_ROLE must be all, web, worker, api, mail-worker, or rag')
   return role
 }
 
-export function roleServesApi(role = getOwntraceRole()) { return role !== 'worker' }
-export function roleRunsWorkers(role = getOwntraceRole()) { return role !== 'web' }
+const base = (role) => aliases[role] || role
+export function roleServesApi(role = getOwntraceRole()) { return ['all', 'web'].includes(base(role)) }
+export function roleRunsWorkers(role = getOwntraceRole()) { return ['all', 'worker'].includes(base(role)) }
 
 // The worker health listener stays inside the container: the image HEALTHCHECK
 // calls it on 127.0.0.1, so it binds loopback unless explicitly overridden.

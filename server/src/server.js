@@ -7,6 +7,7 @@ import connectDatabase from './config/db.js'
 import { logEvent } from './utils/logger.js'
 import { closeOrderWriteBuffer } from './services/order-write-buffer.service.js'
 import { createWorkerHealthServer, startBackgroundWorkers } from './worker.js'
+import { closeQueues } from './shared/queue.js'
 
 let httpServer
 let isShuttingDown = false
@@ -39,6 +40,8 @@ async function shutdown(signal, exitCode = 0) {
     if (stopBackgroundWorkers) await stopBackgroundWorkers()
     // The web role only enqueues buffered writes; close its producer connection.
     else await closeOrderWriteBuffer()
+    // Closes BullMQ producers (web/api) and connections; no-op without REDIS_URL.
+    await closeQueues()
     await mongoose.disconnect()
   } catch (error) {
     logEvent('error', 'server_shutdown_failed', { signal, role, errorName: error?.name || 'Error' })

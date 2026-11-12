@@ -8,6 +8,7 @@ import MicrosoftConnection from '../models/microsoft-connection.model.js'
 import { MailAnalysis } from '../models/mail-insight.model.js'
 import { queuePushSync } from '../services/mail-push-sync.service.js'
 import { logEvent } from '../utils/logger.js'
+import { MAIL_SYNC, enqueue, redisQueueEnabled } from '../shared/queue.js'
 
 // POST /api/mail/sync-now: the workspace asks for a refresh when it opens or
 // regains focus. It only enqueues through queuePushSync (trigger 'push'), so
@@ -55,6 +56,18 @@ async function recentlyRefreshed(userId, { Job, insight }, analysis, since) {
   return Boolean(await Job.exists({ userId, $or: [{ status: { $in: ACTIVE_JOB } }, { updatedAt: { $gte: since } }] }))
 }
 
+// With REDIS_URL set the mail worker runs the sync; a still-pending job for
+// the same user absorbs double clicks. A Redis failure falls back inline.
+async function queueRefresh(provider, userId) {
+  if (redisQueueEnabled()) {
+    try {
+      await enqueue(MAIL_SYNC, { provider, userId }, { dedupeId: `${provider}-${userId}` })
+      return true
+    } catch (error) { logEvent('warn', 'mail_sync_now_redis_failed', { provider, errorName: error?.name || 'Error' }) }
+  }
+  return queuePushSync(provider, userId)
+}
+
 const router = Router()
 router.use(requireAuth)
 router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next() })
@@ -88,7 +101,7 @@ router.post('/sync-now', async (req, res) => {
   for (const entry of connected) {
     if (await recentlyRefreshed(req.auth.userId, entry, analysis, since)) continue
     try {
-      if (await queuePushSync(entry.provider, req.auth.userId)) queued += 1
+      if (await queueRefresh(entry.provider, userId)) queued += 1
     } catch (error) {
       logEvent('warn', 'mail_sync_now_enqueue_failed', { provider: entry.provider, errorCode: typeof error?.code === 'string' ? error.code : 'MAIL_SYNC_FAILED' })
     }

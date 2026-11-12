@@ -6,6 +6,23 @@ import { orderWriteBufferEnabled } from './config/order-write-buffer.js'
 import { startOrderWriteBufferWorker } from './services/order-write-buffer.service.js'
 import { orderWorkerEnabled } from './config/trace-execution.js'
 import { startMailSyncWorker } from './services/mail-sync-worker.service.js'
+import { queuePushSync } from './services/mail-push-sync.service.js'
+import { MAIL_SYNC, closeQueues, redisQueueEnabled, startWorker } from './shared/queue.js'
+
+// BullMQ consumer for the split deployment (REDIS_URL set). A job only names
+// the user; queuePushSync marks the Mongo sync job due and returns, and the
+// mail sync loop below does the actual fetch from the stored cursor. So the
+// BullMQ job ends before the sync runs and its retries only cover Mongo
+// errors while queueing. A 4xx AppError (busy, needs consent) is final.
+function startQueueWorkers() {
+  const finalAnswer = (error) => { if (!(error?.statusCode >= 400 && error.statusCode < 500)) throw error }
+  startWorker(MAIL_SYNC, ({ provider, userId } = {}) => {
+    // Jobs come from Redis; never let a malformed one reach a Mongo filter.
+    if (!['gmail', 'microsoft'].includes(provider) || !mongoose.isObjectIdOrHexString(userId)) return
+    return queuePushSync(provider, userId).catch(finalAnswer)
+  })
+  return closeQueues
+}
 
 // Starts every background loop (mail sync + push replay + watch renewal +
 // safety poll, Top K, order scans, order write buffer drain) and returns one
@@ -15,9 +32,11 @@ export async function startBackgroundWorkers() {
   const stops = {}
   stops.mailSync = startMailSyncWorker()
   stops.topK = startTopKWorker()
+  if (redisQueueEnabled()) stops.queues = startQueueWorkers()
   let stopping
   function stopBackgroundWorkers() {
     stopping ||= (async () => {
+      if (stops.queues) await stops.queues()
       if (stops.order) await stops.order()
       if (stops.mailSync) await stops.mailSync()
       if (stops.topK) await stops.topK()

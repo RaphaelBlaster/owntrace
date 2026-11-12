@@ -5,8 +5,21 @@ import { matchesMicrosoftClientState } from '../services/microsoft-push.service.
 import { queuePushSync } from '../services/mail-push-sync.service.js'
 import { verifyGmailPubSubRequest } from '../services/google-push.service.js'
 import { logEvent } from '../utils/logger.js'
+import { MAIL_SYNC, enqueue, redisQueueEnabled } from '../shared/queue.js'
 
 const router = Router()
+
+// With REDIS_URL set the webhook only enqueues and the mail worker syncs from
+// the stored cursor. Pushes for one user collapse only while a job is still
+// pending. If Redis is unreachable the producer fails fast and this falls
+// back to the inline queue so no push is lost.
+async function queueSync(provider, userId) {
+  if (redisQueueEnabled()) {
+    try { return await enqueue(MAIL_SYNC, { provider, userId: String(userId) }, { dedupeId: `${provider}-${userId}` }) }
+    catch (error) { logEvent('warn', 'mail_push_enqueue_failed', { provider, errorName: error?.name || 'Error' }) }
+  }
+  return queuePushSync(provider, userId)
+}
 
 router.post('/google', async (request, response) => {
   if (!await verifyGmailPubSubRequest(request.get('authorization'))) return response.sendStatus(401)
@@ -26,7 +39,7 @@ router.post('/google', async (request, response) => {
     logEvent('warn', 'gmail_push_unmatched_mailbox', { reason: 'no_active_connection' })
     return response.sendStatus(204)
   }
-  try { await queuePushSync('gmail', connection.userId) }
+  try { await queueSync('gmail', connection.userId) }
   catch (error) {
     // Ack anyway: the mail sync worker's safety-net poll picks the mailbox up,
     // and a 5xx here only makes Pub/Sub redeliver into the same failure.
@@ -50,7 +63,7 @@ router.post('/microsoft', async (request, response) => {
       if (notification.lifecycleEvent === 'subscriptionRemoved' || notification.lifecycleEvent === 'reauthorizationRequired') {
         await MicrosoftConnection.updateOne({ _id: connection.id }, { $set: { graphSubscriptionExpiresAt: new Date(0), pushStatus: 'PENDING' } })
       }
-      try { await queuePushSync('microsoft', connection.userId) }
+      try { await queueSync('microsoft', connection.userId) }
       catch (error) { logEvent('warn', 'microsoft_push_queue_failed', { errorCode: typeof error?.code === 'string' ? error.code : 'MAIL_PUSH_QUEUE_FAILED' }) }
     }
   }
