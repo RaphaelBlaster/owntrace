@@ -35,6 +35,8 @@ profile owntrace-mail-worker flags=(attach_disconnected,mediate_deleted) {
   /lib/** mr,
   /etc/ssl/** r,
   /etc/hosts r,
+  /etc/host.conf r,
+  @{PROC}/version_signature r,
   /etc/resolv.conf r,
   /etc/nsswitch.conf r,
   /etc/passwd r,
