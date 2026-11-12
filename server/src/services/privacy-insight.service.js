@@ -69,9 +69,26 @@ function parseBreachPagination(rawQuery = {}) {
   }
 }
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+// Bounded, escaped, case-insensitive lookup by service name or domain. Every whitespace token
+// must match the merged record's service name, sender domain or service key.
+function subscriptionSearchMatch(search) {
+  if (search === undefined || search === null || search === '') return null
+  if (typeof search !== 'string' || search.length > 80) throw new AppError('Subscription search must be 80 characters or fewer.', 400, 'INVALID_PAGINATION')
+  const tokens = search.trim().split(/\s+/).filter(Boolean).slice(0, 8)
+  if (!tokens.length) return null
+  return {
+    $and: tokens.map((token) => {
+      const pattern = new RegExp(escapeRegex(token), 'i')
+      return { $or: [{ serviceName: pattern }, { primaryDomain: pattern }, { serviceKey: pattern }] }
+    }),
+  }
+}
+
 async function listSubscriptions(userId, rawQuery = {}) {
-  const { limit, page } = parseBoundedPagination(rawQuery, { allowedKeys: ['focusId'] })
+  const { limit, page } = parseBoundedPagination(rawQuery, { allowedKeys: ['focusId', 'search'] })
   const focusId = rawQuery.focusId
+  const searchMatch = subscriptionSearchMatch(rawQuery.search)
   if (focusId && !mongoose.isObjectIdOrHexString(focusId)) throw new AppError('Subscription not found.', 404, 'SUBSCRIPTION_NOT_FOUND')
   const scopedUserId = new mongoose.Types.ObjectId(userId)
   const safeSubscriptionFields = {
@@ -173,6 +190,7 @@ async function listSubscriptions(userId, rawQuery = {}) {
       },
     },
     { $replaceRoot: { newRoot: '$latest' } },
+    ...(searchMatch ? [{ $match: searchMatch }] : []),
     { $sort: { lastSeenAt: -1, _id: 1 } },
     ...(focusId ? [{ $setWindowFields: { sortBy: { lastSeenAt: -1, _id: 1 }, output: { tracePosition: { $sum: 1, window: { documents: ['unbounded', 'current'] } } } } }] : []),
     {

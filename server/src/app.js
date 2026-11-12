@@ -59,6 +59,7 @@ app.use('/api/identity', identityRouter)
 app.use('/api/trace', traceRouter)
 app.use('/api/orders', orderRouter)
 app.use('/api/top-k', topKRouter)
+app.use('/api/mail', (await import('./routes/mail-refresh.routes.js')).default)
 app.use('/api', privacyFeatureRouter)
 
 if (runtime.nodeEnvironment === 'production') {

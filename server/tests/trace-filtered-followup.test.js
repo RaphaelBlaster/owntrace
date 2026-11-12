@@ -27,7 +27,7 @@ it('completes the filtered jobs followup with a safe page reference and location
   expect(result.content).toMatch(/provider declined/i)
   expect(result.content).not.toContain('PRIVATE OLD RECORD TEXT')
   expect(result.sources).toEqual([{ label: 'Application updates', action: { type: 'show_mail_insights', category: 'jobs', kind: 'applications', status: '', search: '', page: 1 } }])
-  expect(result.actions).toEqual([])
+  expect(result.actions).toEqual(result.sources.slice(0, 1).map(item => item.action))
   expect(event).toHaveBeenCalledWith('delta', { text: result.content })
   expect(consent).toHaveBeenCalled()
   expect(fetch).toHaveBeenCalledTimes(1)
@@ -57,4 +57,14 @@ it('streams and persists a completed followup instead of another failed user tur
   expect(saved.messages.at(-2).status).toBe('completed')
   expect(saved.messages.at(-1)).toMatchObject({ role: 'assistant', status: 'completed' })
   expect(saved.messages.at(-1).content).toContain('Top K')
+})
+
+it('gives the model the exact mail filters shown last instead of keyword shortcuts', async () => {
+  const { traceReferenceContext } = await import('../src/services/trace-context.service.js')
+  const ibm = [{ role: 'assistant', status: 'completed', content: 'IBM summary', actions: [{ type: 'show_mail_insights', category: 'jobs', kind: 'applications', status: '', search: 'IBM', page: 1 }], grounding: [{ tool: 'query_mail_insights', query: { category: 'jobs', kind: 'applications', status: '', search: 'IBM', page: 1 } }] }]
+  expect(traceReferenceContext(ibm).recentWorkspaceContext[0]).toMatchObject({ views: ['top-k'], mailViews: [{ category: 'jobs', kind: 'applications', status: '', search: 'IBM' }] })
+  const fetch = vi.fn().mockImplementation(filtered); vi.stubGlobal('fetch', fetch)
+  await answerTrace('507f1f77bcf86cd799439011', ibm, 'can u show me this in the website exact location', new AbortController().signal, vi.fn(), vi.fn(), config)
+  expect(fetch).toHaveBeenCalled()
+  expect(fetch.mock.calls[0][1].body).toContain('mailViews')
 })

@@ -1,6 +1,13 @@
 import { createHash } from 'node:crypto'
 import { MailAnalysis, MailInsight } from '../models/mail-insight.model.js'
 
+const DEFAULT_MESSAGE_LIMIT = 500, MIN_MESSAGE_LIMIT = 50, MAX_MESSAGE_LIMIT = 5000
+export function analysisMessageLimit() {
+  const raw = process.env.MAIL_ANALYSIS_MESSAGE_LIMIT
+  const value = raw === undefined || String(raw).trim() === '' ? NaN : Number(raw)
+  if (!Number.isFinite(value)) return DEFAULT_MESSAGE_LIMIT
+  return Math.min(MAX_MESSAGE_LIMIT, Math.max(MIN_MESSAGE_LIMIT, Math.floor(value)))
+}
 const normalized = value => String(value || '').normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/g, '')
 const companyDomains = { gevernova: 'gevernova.com', amazon: 'amazon.com', microsoft: 'microsoft.com', google: 'google.com', ibm: 'ibm.com', wayfair: 'wayfair.com', honeywell: 'honeywell.com', cargill: 'cargill.com', deloitte: 'deloitte.com', accenture: 'accenture.com', tataelxsi: 'tataelxsi.com', hcltech: 'hcltech.com', infosys: 'infosys.com', tcs: 'tcs.com', lufthansatechnik: 'lufthansa-technik.com' }
 const atsDomains = new Set(['myworkday.com', 'workday.com', 'greenhouse.io', 'lever.co', 'joinsuperset.com', 'unstop.com'])
@@ -17,9 +24,9 @@ export function groupMailInsights(rows) {
   const groups = new Map()
   const referenceRoles = new Map()
   for (const row of rows) {
-    if (row.category !== 'jobs' || row.referenceType !== 'application' || !row.applicationReference) continue
+    if (row.category !== 'jobs' || !['application', 'requisition'].includes(row.referenceType) || !row.applicationReference) continue
     const employer = normalized(row.companyName) || companyFor(row).domain || ''
-    const key = `${employer}:${row.applicationReference}`
+    const key = `${employer}:${row.referenceType}:${normalized(row.applicationReference)}`
     if (!referenceRoles.has(key)) referenceRoles.set(key, new Set())
     if (row.roleName) referenceRoles.get(key).add(normalized(row.roleName))
   }
@@ -29,13 +36,17 @@ export function groupMailInsights(rows) {
     const eventId = String(row._id || row.id)
     let key = `message:${eventId}`, match = 'unresolved'
     if (row.category === 'jobs' && kind === 'application' && employer) {
-      if (row.applicationReference && row.referenceType === 'application') {
-        const conflictingRoles = referenceRoles.get(`${employer}:${row.applicationReference}`).size > 1
+      if (row.applicationReference && ['application', 'requisition'].includes(row.referenceType)) {
+        // Application reference identifies one candidacy; a requisition / job ID identifies one job
+        // posting, so several applications to the same company stay separate per job ID.
+        const ref = normalized(row.applicationReference)
+        const conflictingRoles = referenceRoles.get(`${employer}:${row.referenceType}:${ref}`).size > 1
         // Conflicting extracted roles cannot safely identify one application.
         if (!conflictingRoles || row.roleName) {
-          key = `${employer}:application:${row.applicationReference}${conflictingRoles ? ':role:' + normalized(row.roleName) : ''}`; match = 'reference'
+          key = `${employer}:${row.referenceType === 'application' ? 'application' : 'job'}:${ref}${conflictingRoles ? ':role:' + normalized(row.roleName) : ''}`; match = row.referenceType === 'application' ? 'reference' : 'job_id'
         }
-      } else if (row.threadHash && row.roleName) {
+      }
+      if (match === 'unresolved' && row.threadHash && row.roleName) {
         key = `${employer}:role:${normalized(row.roleName)}:thread:${row.threadHash}:reference:${row.applicationReference || ''}`; match = 'thread'
       }
     }
@@ -54,9 +65,20 @@ export function groupMailInsights(rows) {
   }).sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt) || a.id.localeCompare(b.id))
 }
 
+// Case- and accent-insensitive folding so "Nestle" matches "Nestlé".
+export const foldSearchText = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+export function searchTokens(search) {
+  return foldSearchText(search).split(/\s+/).filter(Boolean).slice(0, 12)
+}
+function groupSearchText(group) {
+  return foldSearchText([group.company.name, group.company.domain, group.role, group.title, group.summary, group.senderDomain, ...group.events.flatMap(event => [event.title, event.summary, event.senderDomain])].filter(Boolean).join(' '))
+}
+
 export function paginateInsights(groups, { status = '', search = '', kind = 'all', page = 1, limit = 6 } = {}) {
-  const needle = String(search).toLowerCase().trim()
-  const matches = groups.filter(group => (!status || group.status === status) && (kind === 'all' || kind === 'applications' && group.kind === 'application' || kind === 'opportunities' && group.kind === 'opportunity') && (!needle || [group.company.name, group.role, group.title, group.summary, ...group.events.map(event => event.summary)].some(value => String(value || '').toLowerCase().includes(needle))))
+  // Every whitespace-separated token must appear somewhere in the group (AND), so
+  // "Acme engineer" matches an Acme group whose role is "Software Engineer".
+  const tokens = searchTokens(search)
+  const matches = groups.filter(group => (!status || group.status === status) && (kind === 'all' || kind === 'applications' && group.kind === 'application' || kind === 'opportunities' && group.kind === 'opportunity') && (!tokens.length || (haystack => tokens.every(token => haystack.includes(token)))(groupSearchText(group))))
   const currentStatuses = {}, eventStatuses = {}
   for (const group of matches) {
     currentStatuses[group.status] = (currentStatuses[group.status] || 0) + 1
@@ -72,10 +94,10 @@ export function visibleMailScope(userId, analysis) {
 
 export async function queryMailInsights(userId, { category = 'jobs', status = '', search = '', page = 1, limit = 6, kind = category === 'jobs' ? 'applications' : 'all' } = {}) {
   const analysis = await MailAnalysis.findOne({ userId }).lean()
-  const rows = analysis?.runId ? await MailInsight.find({ ...visibleMailScope(userId, analysis), ...(category ? { category } : {}) }).sort({ occurredAt: -1 }).limit(250).lean() : []
+  const rows = analysis?.runId ? await MailInsight.find({ ...visibleMailScope(userId, analysis), ...(category ? { category } : {}) }).sort({ occurredAt: -1 }).limit(analysisMessageLimit()).lean() : []
   const groups = groupMailInsights(rows)
   const result = paginateInsights(groups, { status, search, page, limit, kind })
   result.counts.enrichmentPending = rows.filter(row => row.category === 'jobs' && (row.enrichmentVersion || 0) < 2).length
   const unresolvedMessages = groups.filter(group => group.category === 'jobs' && group.match === 'unresolved' && group.kind !== 'opportunity').reduce((sum, group) => sum + group.messageCount, 0)
-  return { ...result, scan: analysis ? { status: analysis.status, processed: analysis.processed, limit: analysis.limit, provider: analysis.provider, observedAt: analysis.updatedAt, lastErrorCode: analysis.lastErrorCode, enrichmentStatus: analysis.enrichmentStatus || 'IDLE', enrichmentProcessed: analysis.enrichmentProcessed || 0, unresolvedMessages } : { status: 'NOT_SCANNED', processed: 0, limit: 250, unresolvedMessages: 0 } }
+  return { ...result, scan: analysis ? { status: analysis.status, processed: analysis.processed, limit: analysis.limit, provider: analysis.provider, observedAt: analysis.updatedAt, lastErrorCode: analysis.lastErrorCode, enrichmentStatus: analysis.enrichmentStatus || 'IDLE', enrichmentProcessed: analysis.enrichmentProcessed || 0, unresolvedMessages } : { status: 'NOT_SCANNED', processed: 0, limit: analysisMessageLimit(), unresolvedMessages: 0 } }
 }

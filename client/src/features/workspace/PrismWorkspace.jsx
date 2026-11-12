@@ -15,6 +15,7 @@ import api from '../../services/api.js'
 import useAuth from '../auth/useAuth.js'
 import { EmbeddedWorkspaceContext, LegacyShellContext, useWorkspaceNavigate } from './workspace-navigation.jsx'
 import { accountView, actionView, date, label, subscriptionView } from './prism-data.js'
+import useMailRefresh from './use-mail-refresh.js'
 
 const pageSize = (params, sizes) => sizes.includes(Number(params.get('perPage'))) ? Number(params.get('perPage')) : sizes[0]
 function PrismWorkspace({ children, section, entityId }) {
@@ -26,6 +27,7 @@ function PrismWorkspace({ children, section, entityId }) {
   const result = stored?.section === section && stored?.id === id ? stored : null
   const [modal, setDialog] = useState(null), [notice, setNotice] = useState('')
   const [signingOut,setSigningOut] = useState(false)
+  useMailRefresh(Boolean(user))
   const query = params.toString()
   useEffect(() => {
     const controller = new AbortController(), options = { signal: controller.signal }

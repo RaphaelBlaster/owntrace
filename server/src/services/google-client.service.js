@@ -22,7 +22,8 @@ function classifyGoogleError(error) {
     )
   }
 
-  if (status === 429) {
+  const reasons = (error?.response?.data?.error?.errors || []).map(item => item?.reason)
+  if (status === 429 || (status === 403 && reasons.some(reason => ['rateLimitExceeded', 'userRateLimitExceeded'].includes(reason)))) {
     return new AppError(
       'Google is temporarily rate limiting this scan. Wait and retry the batch.',
       429,

@@ -1,8 +1,9 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import User from '../src/models/user.model.js'
 import GoogleConnection from '../src/models/google-connection.model.js'
 import { MailAnalysis, MailInsight } from '../src/models/mail-insight.model.js'
-import { processTopKPage, processMailEnrichmentPage, queueMailEnrichment, startTopKScan, stopTopK } from '../src/services/top-k.service.js'
+import AppError from '../src/utils/app-error.js'
+import { analysisMessageLimit, processTopKPage, processMailEnrichmentPage, queueMailEnrichment, startTopKScan, stopTopK, topKState } from '../src/services/top-k.service.js'
 import { fetchOrderPage, hashOrderValue } from '../src/services/order-mail.service.js'
 import { fetchMailBody } from '../src/services/mail-body.service.js'
 import { gateMessages, categorizeMessages } from '../src/services/mail-intelligence.service.js'
@@ -29,8 +30,10 @@ beforeEach(() => {
   gateMessages.mockImplementation(async inputs => inputs.map(input => input.subject === 'Sale' ? 'marketing' : 'eligible'))
   fetchMailBody.mockResolvedValue('Application received. SECRET_EMAIL_BODY')
 })
+afterEach(() => { vi.unstubAllEnvs() })
 
-it('stops at 250 messages and reads bodies only for Jev-passed mail without storing raw bodies', async () => {
+it('stops at the configured message limit and reads bodies only for Jev-passed mail without storing raw bodies', async () => {
+  vi.stubEnv('MAIL_ANALYSIS_MESSAGE_LIMIT', '250')
   const { scan } = await fixture()
   for (let i = 0; i < 11; i++) await processTopKPage(scan.id)
   const saved = await MailAnalysis.findById(scan.id)
@@ -176,3 +179,142 @@ it('preserves an earlier supported card when a new analysis response is invalid'
   await processTopKPage(scan.id)
   expect(await MailInsight.findById(card.id)).toMatchObject({ title: 'Supported application', evidence: 'Saved application evidence', fingerprint: 'old-input', enrichmentVersion: 1, runId: scan.runId })
 })
+
+it('reads the analysis message limit from the environment with a 500 default clamped to 50-5000', () => {
+  expect(analysisMessageLimit()).toBe(500)
+  vi.stubEnv('MAIL_ANALYSIS_MESSAGE_LIMIT', '1200')
+  expect(analysisMessageLimit()).toBe(1200)
+  vi.stubEnv('MAIL_ANALYSIS_MESSAGE_LIMIT', '10')
+  expect(analysisMessageLimit()).toBe(50)
+  vi.stubEnv('MAIL_ANALYSIS_MESSAGE_LIMIT', '999999')
+  expect(analysisMessageLimit()).toBe(5000)
+  vi.stubEnv('MAIL_ANALYSIS_MESSAGE_LIMIT', 'lots')
+  expect(analysisMessageLimit()).toBe(500)
+})
+
+it('applies the default 500-message limit to the scan, its state and the status view', async () => {
+  const { scan, user } = await fixture()
+  await MailAnalysis.updateOne({ _id: scan.id }, { $set: { status: 'COMPLETED', processed: 250 } })
+  await startTopKScan(user.id, 'gmail', { push: true, followUp: true })
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ status: 'QUEUED', processed: 0, limit: 500 })
+  await MailAnalysis.updateOne({ _id: scan.id }, { $set: { processed: 475, cursor: 'page-19' } })
+  await processTopKPage(scan.id)
+  expect(fetchOrderPage.mock.calls[0][0]).toMatchObject({ limit: 500, processed: 475 })
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ processed: 500, status: 'COMPLETED' })
+  expect((await topKState(user.id, 3)).analysis).toMatchObject({ limit: 500, processed: 500 })
+})
+
+it('scans a connection left in ERROR by an old metadata scan and resets it to CONNECTED', async () => {
+  const { scan, user, connection } = await fixture()
+  await GoogleConnection.updateOne({ _id: connection.id }, { $set: { status: 'ERROR', lastErrorCode: 'GMAIL_SYNC_FAILED' } })
+  await MailAnalysis.updateOne({ _id: scan.id }, { $set: { status: 'COMPLETED', processed: 250 } })
+  await startTopKScan(user.id, 'gmail', { push: true, followUp: true })
+  await processTopKPage(scan.id)
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ status: 'QUEUED', processed: 25, lastErrorCode: null })
+  expect(await GoogleConnection.findById(connection.id)).toMatchObject({ status: 'CONNECTED', lastErrorCode: null })
+})
+
+it('never scans a connection whose Google revocation failed', async () => {
+  const { scan, user, connection } = await fixture()
+  await GoogleConnection.updateOne({ _id: connection.id }, { $set: { status: 'ERROR', lastErrorCode: 'GOOGLE_REVOCATION_FAILED' } })
+  await processTopKPage(scan.id)
+  expect(fetchOrderPage).not.toHaveBeenCalled()
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ status: 'FAILED', lastErrorCode: 'MAIL_SCAN_STOPPED' })
+  await MailAnalysis.updateOne({ _id: scan.id }, { $set: { status: 'COMPLETED' } })
+  await expect(startTopKScan(user.id, 'gmail')).rejects.toMatchObject({ code: 'MAIL_BODY_PERMISSION_REQUIRED' })
+  expect(await GoogleConnection.findById(connection.id)).toMatchObject({ status: 'ERROR' })
+})
+
+it('analyses a message from metadata only when its body request fails', async () => {
+  const { scan } = await fixture()
+  fetchMailBody.mockRejectedValueOnce(new AppError('Mail provider returned an oversized message.', 502, 'MAIL_BODY_REQUEST_FAILED'))
+  await processTopKPage(scan.id)
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ status: 'QUEUED', processed: 25 })
+  expect(categorizeMessages.mock.calls[0][0][0].body).toBe('')
+  expect(categorizeMessages.mock.calls[0][0][1].body).toContain('Application received.')
+  expect(await MailInsight.countDocuments()).toBe(25)
+})
+
+it('fails the page instead of storing metadata-only results when body reads keep failing', async () => {
+  const { scan } = await fixture()
+  fetchMailBody.mockRejectedValue(new AppError('Mail provider could not return this message.', 502, 'MAIL_BODY_REQUEST_FAILED'))
+  await processTopKPage(scan.id)
+  expect(fetchMailBody).toHaveBeenCalledTimes(3)
+  expect(categorizeMessages).not.toHaveBeenCalled()
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ status: 'FAILED', processed: 0, lastErrorCode: 'MAIL_BODY_REQUEST_FAILED' })
+  expect(await MailInsight.countDocuments()).toBe(0)
+})
+
+it('still fails the page when a body read loses its permission', async () => {
+  const { scan } = await fixture()
+  fetchMailBody.mockRejectedValueOnce(new AppError('Reconnect with message access before analyzing email content.', 403, 'MAIL_BODY_SCOPE_REQUIRED'))
+  await processTopKPage(scan.id)
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ status: 'FAILED', lastErrorCode: 'MAIL_BODY_SCOPE_REQUIRED' })
+  expect(await MailInsight.countDocuments()).toBe(0)
+})
+
+it('continues enrichment from metadata only when a body request fails', async () => {
+  const { scan, card } = await enrichmentFixture()
+  fetchMailBody.mockRejectedValueOnce(new AppError('Mail provider could not be reached.', 502, 'MAIL_BODY_REQUEST_FAILED'))
+  await processMailEnrichmentPage(scan.id)
+  expect(categorizeMessages.mock.calls[0][0][0].body).toBe('')
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ enrichmentStatus: 'QUEUED', enrichmentProcessed: 25 })
+  expect(await MailInsight.findById(card.id)).toMatchObject({ enrichmentVersion: 2 })
+})
+
+it('parks a debounced push in pushPending without extending the debounce window', async () => {
+  const { scan, user } = await fixture()
+  await MailAnalysis.updateOne({ _id: scan.id }, { $set: { status: 'COMPLETED', processed: 250 } })
+  const before = (await MailAnalysis.findById(scan.id)).updatedAt
+  expect(await startTopKScan(user.id, 'gmail', { push: true })).toBeUndefined()
+  const saved = await MailAnalysis.findById(scan.id)
+  expect(saved).toMatchObject({ status: 'COMPLETED', pushPending: true })
+  expect(saved.updatedAt.getTime()).toBe(before.getTime())
+})
+
+it('stores a page with one unordered bulkWrite and one insight lookup, even when the provider repeats a message', async () => {
+  const { scan } = await fixture()
+  fetchOrderPage.mockResolvedValueOnce({ cursor: 'more', messages: [
+    { providerId: 'dup', senderDomain: 'jobs.example.com', subject: 'Application received', occurredAt: '2026-10-25T00:00:00Z' },
+    { providerId: 'dup', senderDomain: 'jobs.example.com', subject: 'Application received', occurredAt: '2026-10-25T00:00:00Z' },
+    { providerId: 'other', senderDomain: 'shop.example.com', subject: 'Sale', occurredAt: '2026-10-25T00:00:00Z' },
+  ] })
+  const bulk = vi.spyOn(MailInsight, 'bulkWrite')
+  const find = vi.spyOn(MailInsight, 'find')
+  const findOne = vi.spyOn(MailInsight, 'findOne')
+  await processTopKPage(scan.id)
+  expect(bulk).toHaveBeenCalledTimes(1)
+  expect(bulk.mock.calls[0][0]).toHaveLength(2)
+  expect(bulk.mock.calls[0][1]).toEqual({ ordered: false })
+  expect(find).toHaveBeenCalledTimes(1)
+  expect(findOne).not.toHaveBeenCalled()
+  expect(await MailInsight.countDocuments({ runId: 'worker-run' })).toBe(2)
+  expect(await MailAnalysis.findById(scan.id)).toMatchObject({ status: 'QUEUED', processed: 3 })
+  bulk.mockRestore(); find.mockRestore(); findOne.mockRestore()
+})
+
+it('renews a running page lease and aborts the page when the lease is lost', async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  try {
+    const { scan } = await fixture()
+    let release
+    fetchOrderPage.mockImplementationOnce((_scan, signal) => new Promise((resolve, reject) => {
+      release = resolve
+      signal.addEventListener('abort', () => reject(signal.reason))
+    }))
+    const work = processTopKPage(scan.id)
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    const claimed = await MailAnalysis.findById(scan.id).lean()
+    await MailAnalysis.updateOne({ _id: scan.id }, { $set: { leaseUntil: new Date(Date.now() + 1000) } }, { timestamps: false })
+    await vi.advanceTimersByTimeAsync(60000)
+    await vi.waitFor(async () => expect((await MailAnalysis.findById(scan.id).lean()).leaseUntil.getTime()).toBeGreaterThan(Date.now() + 200000))
+    expect((await MailAnalysis.findById(scan.id).lean()).updatedAt.getTime()).toBe(claimed.updatedAt.getTime())
+    // Another worker took the lease over: the next renewal aborts this page.
+    await MailAnalysis.collection.updateOne({ _id: scan._id }, { $set: { leaseId: 'someone-else' } })
+    await vi.advanceTimersByTimeAsync(60000)
+    await work
+    expect(await MailInsight.countDocuments({ runId: 'worker-run' })).toBe(0)
+    expect(await MailAnalysis.findById(scan.id).select('+leaseId')).toMatchObject({ status: 'RUNNING', leaseId: 'someone-else' })
+  } finally { vi.useRealTimers() }
+})
+

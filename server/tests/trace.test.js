@@ -149,7 +149,7 @@ describe('TRACE authenticated assistant', () => {
     for (let i = 0; i < 14; i++) records.push(await Subscription.create({ userId: owner.id, serviceKey: `service${i}.com`, serviceName: `Service ${i}`, primaryDomain: `service${i}.com`, confidenceLevel: 'LIKELY', confidenceScore: 80, evidenceCount: 2, basis: ['PAYMENT'], firstSeenAt: new Date(), lastSeenAt: new Date(Date.now() - i * 10000) }))
     const result = await executeTraceTool(owner.id, 'focus_entity', { entityType: 'subscription', entityId: records.at(-1).id })
     expect(result.actions[0].page).toBe(2)
-    const second = await executeTraceTool(owner.id, 'query_subscriptions', { page: 2 })
+    const second = await executeTraceTool(owner.id, 'query_subscriptions', { search: '', page: 2 })
     expect(second.data.subscriptions.map((item) => item.id)).toContain(records.at(-1).id)
     expect(second.data.pagination.total).toBe(14)
     expect(second.resultSummary).toContainEqual({ resource: 'subscriptions', totalRecords: 14, returnedRecords: 2, page: 2, pages: 2, partial: true, interpretation: 'Recurring-service metadata signals; active billing is not established.' })

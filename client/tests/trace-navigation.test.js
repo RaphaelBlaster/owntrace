@@ -12,6 +12,7 @@ test('TRACE navigation accepts only structured known destinations', async () => 
   assert.equal(actionDestination({type:'open_order',orderId:'c'.repeat(24)}),`/trace?focus=${'c'.repeat(24)}&panel=orders`)
   assert.equal(actionDestination({type:'open_order',orderId:'../foreign'}),null)
   assert.equal(actionDestination({ type: 'navigate_to_page', page: 'settings' }), '/settings')
+  assert.equal(actionDestination({ type: 'navigate_to_page', page: 'connect' }), '/trace?panel=connect')
   assert.equal(actionDestination({ type: 'navigate_to_page', page: 'https://example.com' }), null)
   assert.equal(actionDestination({ type: 'open_account', accountId: '../other-user' }), null)
   assert.equal(actionDestination({ type: 'focus_entity', entityType: 'subscription', entityId: 'b'.repeat(24), page: 3 }), `/trace?page=3&focus=${'b'.repeat(24)}&panel=subscriptions`)
@@ -28,6 +29,18 @@ test('pane links preserve chat and relevant target query/hash/state; privileged 
   assert.equal(tracePreviewPath({pathname:'/trace',search:'?panel=https://example.com'}),null)
   assert.equal(tracePreviewPath({pathname:'/trace',search:'?panel=accounts&entity=../other'}),null)
   assert.equal(tracePreviewPath({pathname:'/trace/view/subscriptions',search:''}),'/subscriptions')
+  assert.equal(tracePreviewPath({pathname:'/trace',search:'?panel=connect'}),'/connect')
+  assert.equal(tracePreviewPath({pathname:'/trace/view/connect/gmail',search:''}),null)
+  assert.equal(tracePreviewPath({pathname:'/trace',search:'?panel=settings'}),null)
+})
+test('privileged pages opened from TRACE link back to the same conversation', () => {
+  assert.equal(workspaceDestination('/trace', false, 'owned'), '/trace?chat=owned')
+  assert.equal(workspaceDestination('/trace?chat=other', false, 'owned'), '/trace?chat=other')
+  assert.equal(workspaceDestination('/trace', false, null), '/trace')
+  assert.equal(workspaceDestination('/trace', false, '../x?y'), '/trace')
+  assert.equal(workspaceDestination('/dashboard', false, 'owned'), '/dashboard')
+  assert.equal(workspaceDestination('https://example.com/trace', false, 'owned'), 'https://example.com/trace')
+  assert.deepEqual(workspaceDestination({ pathname: '/trace', state: 1 }, false, 'owned'), { pathname: '/trace', search: '?chat=owned', hash: '', state: 1 })
 })
 
 test('older saved mail sources recover the answer filters without changing unrelated sources', async () => {

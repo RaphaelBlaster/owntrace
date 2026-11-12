@@ -17,8 +17,18 @@ async function sourceFilter(userId) {
   const [gmail, outlook] = await Promise.all([GoogleConnection.findOne({ userId }).select('_id'), MicrosoftConnection.findOne({ userId }).select('_id')])
   return { userId, $or: [...(gmail ? [{ provider: 'gmail', connectionId: gmail._id }] : []), ...(outlook ? [{ provider: 'outlook', connectionId: outlook._id }] : []), { _id: null }] }
 }
-export async function listOrderCards(userId, { page = 1, limit = 12, provider, status } = {}) {
-  const filter = { ...await sourceFilter(userId), ...(provider ? { provider } : {}), ...(status ? { status } : {}) }
+const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+// Bounded, escaped, case-insensitive merchant/item lookup. Every whitespace token must match one
+// of the saved metadata fields (merchant name, sender domain or the derived item summary).
+export function orderSearchFilter(search) {
+  if (search === undefined || search === null || search === '') return {}
+  if (typeof search !== 'string' || search.length > 80) throw new AppError('Order search must be 80 characters or fewer.', 400, 'INVALID_ORDER_QUERY')
+  const tokens = search.trim().split(/\s+/).filter(Boolean).slice(0, 8)
+  if (!tokens.length) return {}
+  return { $and: tokens.map(token => { const pattern = new RegExp(escapeRegex(token), 'i'); return { $or: [{ merchantName: pattern }, { merchantDomain: pattern }, { summary: pattern }] } }) }
+}
+export async function listOrderCards(userId, { page = 1, limit = 12, provider, status, search } = {}) {
+  const filter = { ...await sourceFilter(userId), ...(provider ? { provider } : {}), ...(status ? { status } : {}), ...orderSearchFilter(search) }
   const [events, total] = await Promise.all([OrderEvent.find(filter).sort({ occurredAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(), OrderEvent.countDocuments(filter)])
   return { orders: events.map(orderCard), pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } }
 }

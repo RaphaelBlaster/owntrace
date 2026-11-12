@@ -29,6 +29,14 @@ const gmailSyncJobSchema = new mongoose.Schema(
     startedAt: { type: Date, default: Date.now },
     completedAt: { type: Date, default: null },
     pushPending: { type: Boolean, default: false, select: false },
+    // FULL lists the mailbox with messages.list; INCREMENTAL reads only the
+    // messages added since historyStartId through users.history.list.
+    syncMode: { type: String, enum: ['FULL', 'INCREMENTAL'], default: 'FULL' },
+    historyStartId: { type: String, default: null, select: false },
+    // Mailbox historyId this run will store on the connection when it completes.
+    historyLatestId: { type: String, default: null, select: false },
+    historyPageCount: { type: Number, default: 0, min: 0, select: false },
+    metadataFailedCount: { type: Number, default: 0, min: 0, select: false },
   },
   {
     timestamps: true,
@@ -43,6 +51,10 @@ const gmailSyncJobSchema = new mongoose.Schema(
         delete returnedObject.runId
         delete returnedObject.leaseId
         delete returnedObject.pushPending
+        delete returnedObject.historyStartId
+        delete returnedObject.historyLatestId
+        delete returnedObject.historyPageCount
+        delete returnedObject.metadataFailedCount
         return returnedObject
       },
     },

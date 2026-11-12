@@ -8,8 +8,8 @@ import User from '../models/user.model.js'
 import { executeTrace, waitForTraceDrain } from '../services/trace-execution.service.js'
 import { checkTraceConsent as checkConsent } from '../services/trace-consent.service.js'
 import { SESSION_COOKIE_NAME } from '../config/auth.js'
-import { getTraceProviderConfig, getTraceProviderName } from '../services/trace-provider.service.js'
-import { executeTraceTool } from '../services/trace-tools.service.js'
+import { getTraceLimits, getTraceProviderConfig, getTraceProviderName } from '../services/trace-provider.service.js'
+import { executeTraceTool, normalizeToolArgs, mailStatuses } from '../services/trace-tools.service.js'
 import AppError from '../utils/app-error.js'
 import { hasTraceConsent, traceConsentVersion } from '../services/trace-decision-config.js'
 
@@ -59,10 +59,15 @@ router.post('/resolve-action', async (request, response) => {
   if (!action || typeof action.type !== 'string') throw new AppError('Invalid navigation action.', 400, 'INVALID_TRACE_TOOL')
   const { type, ...args } = action
   if (type === 'show_mail_insights') {
-    const result = await executeTraceTool(request.auth.userId, 'query_mail_insights', args)
+    // Sources saved before status became an enum may carry free-text statuses (e.g. "rejection");
+    // map known synonyms and drop unknown ones so old source buttons still open.
+    const query = normalizeToolArgs('query_mail_insights', args)
+    if (query && typeof query === 'object' && typeof query.status === 'string' && !mailStatuses.includes(query.status)) query.status = ''
+    const result = await executeTraceTool(request.auth.userId, 'query_mail_insights', query)
     return response.json({ actions: [result.sources[0].action] })
   }
-  if (!['navigate_to_page', 'open_account', 'show_subscriptions', 'focus_entity','close_preview'].includes(type)) throw new AppError('Unsupported navigation action.', 400, 'INVALID_TRACE_TOOL')
+  // open_order is emitted by query_orders/get_order sources; omitting it made every order source button fail.
+  if (!['navigate_to_page', 'open_account', 'open_order', 'show_subscriptions', 'focus_entity','close_preview'].includes(type)) throw new AppError('Unsupported navigation action.', 400, 'INVALID_TRACE_TOOL')
   const result = await executeTraceTool(request.auth.userId, type, args)
   response.json({ actions: result.actions })
 })
@@ -80,14 +85,16 @@ router.post('/conversations/:id/messages', limiter, async (request, response) =>
   if (retryId && !retry) throw new AppError('This question cannot be retried. Reload the conversation.', 409, 'TRACE_INVALID_RETRY')
   const messageId = retry ? retry._id : new mongoose.Types.ObjectId()
   const leaseId = randomUUID()
+  // Configurable (TRACE_TURN_TIMEOUT_MS); the lease always outlives the turn it protects.
+  const { turnTimeoutMs } = getTraceLimits()
   const locked = await Conversation.findOneAndUpdate({ _id: conversation.id, userId: request.auth.userId, $or: [{ leaseUntil: null }, { leaseUntil: { $lte: new Date() } }] }, {
-    $set: { leaseId, leaseUntil: new Date(Date.now() + 60_000), title: conversation.messages.length ? conversation.title : content.trim().slice(0, 80), ...(retry ? { 'messages.$[turn].status': 'pending' } : {}) },
+    $set: { leaseId, leaseUntil: new Date(Date.now() + turnTimeoutMs + 15_000), title: conversation.messages.length ? conversation.title : content.trim().slice(0, 80), ...(retry ? { 'messages.$[turn].status': 'pending' } : {}) },
     ...(!retry ? { $push: { messages: { _id: messageId, role: 'user', content: content.trim(), status: 'pending' } } } : {}),
   }, { returnDocument: 'after', ...(retry ? { arrayFilters: [{ 'turn._id': messageId }] } : {}) })
   if (!locked) throw new AppError('TRACE is already answering in this conversation.', 409, 'TRACE_BUSY')
   const controller = new AbortController()
-  const deadlineAt = Date.now() + 45_000
-  const timer = setTimeout(() => controller.abort(), 45_000)
+  const deadlineAt = Date.now() + turnTimeoutMs
+  const timer = setTimeout(() => controller.abort(), turnTimeoutMs)
   const disconnect = () => { if (!response.writableEnded) controller.abort() }
   response.on('close', disconnect)
   const streaming = request.get('accept')?.includes('text/event-stream')

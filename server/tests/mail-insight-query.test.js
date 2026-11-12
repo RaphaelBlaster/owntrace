@@ -86,3 +86,15 @@ it('keeps the previous saved results visible during refresh, then uses only the 
   await MailAnalysis.updateOne({ userId }, { $set: { status: 'COMPLETED' } })
   expect((await queryMailInsights(userId)).counts.messages).toBe(1)
 })
+
+it('groups applications by job ID and keeps different job IDs at the same company separate', () => {
+  const groups = groupMailInsights([
+    event('j1', { applicationReference: 'R-1001', referenceType: 'requisition', roleName: 'Data Engineer', status: 'application_received', occurredAt: new Date('2026-10-01'), threadHash: 't1' }),
+    event('j2', { applicationReference: 'r1001', referenceType: 'requisition', roleName: 'Data Engineer', status: 'interview', occurredAt: new Date('2026-10-05'), threadHash: 't2' }),
+    event('j3', { applicationReference: 'R-2002', referenceType: 'requisition', roleName: 'ML Engineer', status: 'rejected', occurredAt: new Date('2026-10-03'), threadHash: 't3' }),
+  ])
+  const byJob = groups.filter(group => group.match === 'job_id')
+  expect(byJob).toHaveLength(2)
+  expect(byJob.find(group => group.role === 'Data Engineer')).toMatchObject({ messageCount: 2, status: 'interview' })
+  expect(byJob.find(group => group.role === 'ML Engineer')).toMatchObject({ messageCount: 1, status: 'rejected' })
+})

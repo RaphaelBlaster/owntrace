@@ -15,24 +15,26 @@ function TracePreview({ close }) {
   useEffect(() => {
     setFocusError('')
     const params = new URLSearchParams(location.search)
+    // A filtered Top K view opened by TRACE (e.g. search=IBM) highlights its first matching result.
+    const topKMatch = path === 'top-k' && (params.get('search') || params.get('status')) ? '.ot-top-k-application' : null
     const target = params.get('focus') || (path.startsWith('accounts/') ? path.split('/')[1] : null)
-    if (!target || !/^[a-f\d]{24}$/i.test(target)) return undefined
+    if (!topKMatch && (!target || !/^[a-f\d]{24}$/i.test(target))) return undefined
     let highlighted = null
-    let highlightTimer
     const focus = () => {
-      const element = root.current?.querySelector(`[data-trace-entity="${target}"]`)
+      const element = root.current?.querySelector(topKMatch && !target ? topKMatch : `[data-trace-entity="${target}"]`)
       if (!element) return false
       observer.disconnect(); clearTimeout(timeout)
       element.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
-      element.classList.add('trace-entity-highlight'); highlighted = element
-      highlightTimer = setTimeout(() => element.classList.remove('trace-entity-highlight'), 2600)
+      // Filtered mail results stay outlined so the user can see exactly where the matches are.
+      highlighted = topKMatch && !target ? [...root.current.querySelectorAll(topKMatch)] : [element]
+      highlighted.forEach(item => item.classList.add('trace-entity-highlight'))
       return true
     }
     const observer = new MutationObserver(focus)
     const timeout = setTimeout(() => { observer.disconnect(); setFocusError('The requested item is no longer visible. Refresh the view or select another source.') }, 15000)
     observer.observe(root.current, { childList: true, subtree: true })
     focus()
-    return () => { observer.disconnect(); clearTimeout(timeout); clearTimeout(highlightTimer); highlighted?.classList.remove('trace-entity-highlight') }
+    return () => { observer.disconnect(); clearTimeout(timeout); highlighted?.forEach(item => item.classList.remove('trace-entity-highlight')) }
   }, [location.pathname, location.search, path])
   return <section className="trace-preview" aria-label="Live OwnTrace dashboard preview">
     <header className="trace-preview-header"><span><i aria-hidden="true" /> Live workspace</span><strong>{title}</strong><button type="button" onClick={close} aria-label="Close dashboard preview">×</button></header>

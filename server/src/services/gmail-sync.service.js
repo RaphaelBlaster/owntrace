@@ -19,6 +19,7 @@ const METADATA_CONCURRENCY = 5
 const DEFAULT_MESSAGE_LIMIT = 2000
 const METADATA_HEADERS = ['From', 'Subject', 'Date']
 const activeBatchBarriers = new Map()
+const JOB_PRIVATE_FIELDS = '+nextPageToken +runId +leaseId +historyStartId +historyLatestId +historyPageCount +metadataFailedCount'
 
 function getMessageLimit() {
   const configured = Number(process.env.GMAIL_SYNC_MESSAGE_LIMIT)
@@ -93,8 +94,16 @@ function deriveSignal(userId, connectionId, message) {
   }
 }
 
-async function startSync(userId, _options = {}) {
-  const connection = await GoogleConnection.findOne({ userId })
+// Pushes and safety polls (trigger 'push') read only the messages added since
+// the stored historyId. User-started scans stay full scans. Pass
+// incremental: true/false to override.
+function wantsIncremental({ incremental, trigger } = {}) {
+  if (typeof incremental === 'boolean') return incremental
+  return trigger === 'push'
+}
+
+async function startSync(userId, options = {}) {
+  const connection = await GoogleConnection.findOne({ userId }).select('+gmailHistoryId +gmailWatchHistoryId')
   if (!connection) throw new AppError('Connect Gmail before starting a scan.', 409, 'GOOGLE_NOT_CONNECTED')
   if (connection.status === 'NEEDS_RECONNECT') {
     throw new AppError('Reconnect Gmail before starting a scan.', 409, 'GOOGLE_RECONNECT_REQUIRED')
@@ -103,6 +112,10 @@ async function startSync(userId, _options = {}) {
   if (connection.status === 'DISCONNECTING') {
     throw new AppError('Gmail is disconnecting. Try again shortly.', 409, 'GOOGLE_DISCONNECT_IN_PROGRESS')
   }
+  const incremental = wantsIncremental(options) && Boolean(connection.gmailHistoryId)
+  // A full scan records the mailbox historyId on its first page. The watch
+  // historyId predates this scan, so it is a safe (older) fallback baseline.
+  const fallbackBaseline = !incremental && connection.gmailWatchHistoryId ? connection.gmailWatchHistoryId : null
   let job
   try {
     job = await GmailSyncJob.findOneAndUpdate(
@@ -118,7 +131,11 @@ async function startSync(userId, _options = {}) {
           completedAt: null,
           connectionId: connection.id,
           estimatedTotal: null,
+          historyLatestId: incremental ? connection.gmailHistoryId : fallbackBaseline,
+          historyPageCount: 0,
+          historyStartId: incremental ? connection.gmailHistoryId : null,
           lastErrorCode: null,
+          metadataFailedCount: 0,
           nextPageToken: null,
           processedCount: 0,
           pushPending: false,
@@ -127,6 +144,7 @@ async function startSync(userId, _options = {}) {
           startedAt: new Date(),
           status: 'QUEUED',
           storedCount: 0,
+          syncMode: incremental ? 'INCREMENTAL' : 'FULL',
         },
       },
       { returnDocument: 'after', runValidators: true, upsert: true },
@@ -146,24 +164,46 @@ async function startSync(userId, _options = {}) {
   return job
 }
 
+// Explicit entry point for callers that always want the history-based path.
+// It falls back to a full scan when no baseline is stored or Gmail rejects it.
+function startIncrementalSync(userId, options = {}) {
+  return startSync(userId, { ...options, incremental: true })
+}
+
 async function getSyncJob(userId, { includePageToken = false } = {}) {
   const query = GmailSyncJob.findOne({ userId })
-  if (includePageToken) query.select('+nextPageToken +runId +leaseId')
+  if (includePageToken) query.select(JOB_PRIVATE_FIELDS)
   return query
 }
 
+// Gmail per-user quota answers 429 or 403 rateLimitExceeded when a full scan runs hot.
+// Back off and retry instead of failing the whole scan and marking the mailbox ERROR.
+export function isGmailRateLimited(error) {
+  const status = Number(error?.response?.status ?? error?.code)
+  const reasons = (error?.response?.data?.error?.errors || []).map(item => item?.reason)
+  return status === 429 || (status === 403 && reasons.some(reason => ['rateLimitExceeded', 'userRateLimitExceeded'].includes(reason)))
+}
+const RATE_LIMIT_RETRIES = 4
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
 async function fetchMessageMetadata(gmail, messageId) {
-  try {
-    const response = await gmail.users.messages.get({
-      format: 'metadata',
-      id: messageId,
-      metadataHeaders: METADATA_HEADERS,
-      userId: 'me',
-    })
-    return { message: response.data }
-  } catch (error) {
-    if (error?.response?.status === 404) return { deleted: true }
-    throw error
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const response = await gmail.users.messages.get({
+        format: 'metadata',
+        id: messageId,
+        metadataHeaders: METADATA_HEADERS,
+        userId: 'me',
+      })
+      return { message: response.data }
+    } catch (error) {
+      if (error?.response?.status === 404) return { deleted: true }
+      if (attempt < RATE_LIMIT_RETRIES && isGmailRateLimited(error)) {
+        await sleep(Math.min(16000, 1000 * 2 ** attempt) + Math.floor(Math.random() * 400))
+        continue
+      }
+      throw error
+    }
   }
 }
 
@@ -193,6 +233,76 @@ async function fetchMetadataBatch(gmail, messages) {
   return results
 }
 
+function isHistoryExpired(error) {
+  const status = Number(error?.response?.status ?? error?.status)
+  return status === 404 || error?.code === 404
+}
+
+// Hard stop for history pagination so a mailbox whose added messages are all
+// filtered out (spam/trash) cannot page forever.
+function getHistoryPageLimit() {
+  return Math.ceil(getMessageLimit() / BATCH_SIZE) + 20
+}
+
+async function readMailboxHistoryId(gmail) {
+  try {
+    const response = await gmail.users.getProfile({ userId: 'me' })
+    return response?.data?.historyId ? String(response.data.historyId) : null
+  } catch {
+    // Without a baseline the run behaves exactly like a scan before
+    // incremental sync existed; critical auth/rate errors surface on list.
+    return null
+  }
+}
+
+async function listFullPage(gmail, { pageToken, processedBefore, historyLatestId }) {
+  // The first page records the mailbox historyId before listing, so mail that
+  // arrives during the scan is picked up by the next incremental sync.
+  const baseline = pageToken ? historyLatestId : (await readMailboxHistoryId(gmail)) || historyLatestId
+  const listResponse = await gmail.users.messages.list({
+    maxResults: Math.min(BATCH_SIZE, Math.max(1, getMessageLimit() - processedBefore)),
+    pageToken: pageToken || undefined,
+    userId: 'me',
+  })
+  return {
+    estimatedTotal: listResponse.data.resultSizeEstimate ?? null,
+    historyLatestId: baseline || null,
+    messages: (listResponse.data.messages || []).slice(0, Math.min(BATCH_SIZE, Math.max(0, getMessageLimit() - processedBefore))),
+    providerNextPageToken: listResponse.data.nextPageToken || null,
+    truncated: false,
+  }
+}
+
+async function listHistoryPage(gmail, { historyStartId, pageToken, processedBefore, historyLatestId }) {
+  const response = await gmail.users.history.list({
+    historyTypes: ['messageAdded'],
+    maxResults: BATCH_SIZE,
+    pageToken: pageToken || undefined,
+    startHistoryId: historyStartId,
+    userId: 'me',
+  })
+  const seen = new Set()
+  const added = []
+  for (const record of response.data.history || []) {
+    for (const entry of record.messagesAdded || []) {
+      const id = entry?.message?.id
+      const labels = entry?.message?.labelIds || []
+      // messages.list skips spam and trash by default; match the full scan.
+      if (!id || seen.has(id) || labels.includes('SPAM') || labels.includes('TRASH')) continue
+      seen.add(id)
+      added.push({ id })
+    }
+  }
+  const remaining = Math.max(0, getMessageLimit() - processedBefore)
+  return {
+    estimatedTotal: null,
+    historyLatestId: response.data.historyId ? String(response.data.historyId) : historyLatestId,
+    messages: added.slice(0, remaining),
+    providerNextPageToken: response.data.nextPageToken || null,
+    truncated: added.length > remaining,
+  }
+}
+
 async function processNextBatch(userId) {
   const currentJob = await getSyncJob(userId, { includePageToken: true })
 
@@ -216,7 +326,7 @@ async function processNextBatch(userId) {
     },
     { $set: { lastErrorCode: null, leaseId, status: 'SCANNING' } },
     { returnDocument: 'after' },
-  ).select('+nextPageToken +runId +leaseId')
+  ).select(JOB_PRIVATE_FIELDS)
 
   if (!job) {
     throw new AppError(
@@ -233,16 +343,42 @@ async function processNextBatch(userId) {
   try {
     const updatedJob = await withGoogleClient(userId, async ({ connection, oauthClient }) => {
       const gmail = google.gmail({ auth: oauthClient, version: 'v1' })
-      const listResponse = await gmail.users.messages.list({
-        maxResults: Math.min(BATCH_SIZE, Math.max(1, getMessageLimit() - job.processedCount)),
-        pageToken: job.nextPageToken || undefined,
-        userId: 'me',
-      })
-      const messages = (listResponse.data.messages || []).slice(0, Math.min(BATCH_SIZE, Math.max(0, getMessageLimit() - job.processedCount)))
+      const state = {
+        historyLatestId: job.historyLatestId || null,
+        historyPageCount: job.historyPageCount || 0,
+        historyStartId: job.historyStartId || null,
+        metadataFailedCount: job.metadataFailedCount || 0,
+        pageToken: job.nextPageToken || null,
+        processedBefore: job.processedCount,
+      }
+      let incremental = job.syncMode === 'INCREMENTAL' && Boolean(state.historyStartId)
+      let page
+      if (incremental) {
+        try {
+          page = await listHistoryPage(gmail, state)
+        } catch (error) {
+          if (!isHistoryExpired(error)) throw error
+          // The stored historyId is too old or invalid: restart this run as
+          // the existing full scan and drop the unusable baseline.
+          const reset = await GmailSyncJob.updateOne(
+            { ...ownedLease, status: 'SCANNING' },
+            { $set: { historyLatestId: null, historyPageCount: 0, historyStartId: null, metadataFailedCount: 0, nextPageToken: null, processedCount: 0, storedCount: 0, syncMode: 'FULL' } },
+          )
+          if (!reset.modifiedCount) return getSyncJob(userId)
+          await GoogleConnection.updateOne(
+            { _id: connection.id, userId, gmailHistoryId: state.historyStartId },
+            { $set: { gmailHistoryId: null, gmailHistoryIdUpdatedAt: null } },
+          )
+          Object.assign(state, { historyLatestId: null, historyPageCount: 0, historyStartId: null, metadataFailedCount: 0, pageToken: null, processedBefore: 0 })
+          incremental = false
+        }
+      }
+      if (!incremental) page = await listFullPage(gmail, state)
+      const { messages } = page
 
       const processingUpdate = await GmailSyncJob.updateOne(
         { ...ownedLease, status: 'SCANNING' },
-        { $set: { estimatedTotal: listResponse.data.resultSizeEstimate ?? null, status: 'PROCESSING' } },
+        { $set: { estimatedTotal: page.estimatedTotal, status: 'PROCESSING' } },
       )
 
       if (!processingUpdate.modifiedCount) return getSyncJob(userId)
@@ -283,22 +419,26 @@ async function processNextBatch(userId) {
         storedCount = await writeSignalPage('gmail', signals, userId)
       }
 
-      const processedCount = job.processedCount + messages.length
-      const reachedLimit = processedCount >= getMessageLimit()
-      const nextPageToken = reachedLimit ? null : listResponse.data.nextPageToken || null
+      const processedCount = state.processedBefore + messages.length
+      const historyPageCount = state.historyPageCount + (incremental ? 1 : 0)
+      const reachedLimit = processedCount >= getMessageLimit() || (incremental && historyPageCount >= getHistoryPageLimit())
+      const hasMore = Boolean(page.providerNextPageToken) || page.truncated
+      const nextPageToken = reachedLimit ? null : page.providerNextPageToken
       const completed = !nextPageToken
       const lastErrorCode = failedCount
         ? 'PARTIAL_METADATA_RESULTS'
-        : reachedLimit && listResponse.data.nextPageToken
+        : reachedLimit && hasMore
           ? 'MESSAGE_LIMIT_REACHED'
           : null
 
       const updatedJob = await GmailSyncJob.findOneAndUpdate(
         { ...ownedLease, status: 'PROCESSING' },
         {
-          $inc: { processedCount: messages.length, storedCount },
+          $inc: { metadataFailedCount: failedCount, processedCount: messages.length, storedCount },
           $set: {
             completedAt: completed ? new Date() : null,
+            historyLatestId: page.historyLatestId,
+            historyPageCount,
             lastErrorCode,
             nextPageToken,
             status: completed ? 'COMPLETED' : 'QUEUED',
@@ -311,9 +451,23 @@ async function processNextBatch(userId) {
 
       if (completed) {
         await drainBufferedOrderWrites()
+        // A run with failed metadata fetches keeps the previous baseline so the
+        // next incremental sync retries those messages (writes are idempotent).
+        // Only incremental runs hold it back: a full scan cannot retry old mail
+        // through history, and holding it would force a full rescan per push.
+        const runFailed = state.metadataFailedCount + failedCount > 0
+        // history.list is oldest-first, so a capped incremental run skipped the
+        // newest mail. Drop the baseline so the next push runs the full scan,
+        // which reads the newest messages and records a fresh baseline.
+        const truncatedHistory = incremental && reachedLimit && hasMore
+        let baselineUpdate = {}
+        if (truncatedHistory) baselineUpdate = { gmailHistoryId: null, gmailHistoryIdUpdatedAt: null }
+        else if (page.historyLatestId && !(incremental && runFailed)) {
+          baselineUpdate = { gmailHistoryId: page.historyLatestId, gmailHistoryIdUpdatedAt: new Date() }
+        }
         await GoogleConnection.updateOne(
           { _id: connection.id, userId, status: 'SYNCING' },
-          { $set: { lastErrorCode, lastSyncAt: new Date(), status: 'CONNECTED' } },
+          { $set: { ...baselineUpdate, lastErrorCode, lastSyncAt: new Date(), status: 'CONNECTED' } },
         )
       }
 
@@ -330,7 +484,13 @@ async function processNextBatch(userId) {
       { ...ownedLease, status: { $in: ['SCANNING', 'PROCESSING', 'COMPLETED'] } },
       { $set: { lastErrorCode: error.code || 'GMAIL_SYNC_FAILED', status: 'FAILED' } },
     )
-    if (failed.matchedCount && error.code !== 'GOOGLE_RECONNECT_REQUIRED') {
+    // A rate limit is transient: keep the mailbox usable; the safety poll / next push retries.
+    if (failed.matchedCount && error.code === 'GOOGLE_RATE_LIMITED') {
+      await GoogleConnection.updateOne(
+        { _id: job.connectionId, userId, status: { $ne: 'DISCONNECTING' } },
+        { $set: { lastErrorCode: error.code } },
+      )
+    } else if (failed.matchedCount && error.code !== 'GOOGLE_RECONNECT_REQUIRED') {
       await GoogleConnection.updateOne(
         { _id: job.connectionId, userId, status: { $ne: 'DISCONNECTING' } },
         { $set: { lastErrorCode: error.code || 'GMAIL_SYNC_FAILED', status: 'ERROR' } },
@@ -377,5 +537,6 @@ export {
   getSyncJob,
   parseSender,
   processNextBatch,
+  startIncrementalSync,
   startSync,
 }

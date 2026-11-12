@@ -7,7 +7,7 @@ import requireAuth from './middleware/auth.middleware.js'
 import Conversation from './models/trace-conversation.model.js'
 import { answerTrace } from './services/trace-assistant.service.js'
 import { checkTraceConsent } from './services/trace-consent.service.js'
-import { getTraceProviderConfig } from './services/trace-provider.service.js'
+import { getTraceLimits, getTraceProviderConfig } from './services/trace-provider.service.js'
 import { writeTraceFrame, waitForTraceDrain } from './services/trace-execution.service.js'
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js'
 import AppError from './utils/app-error.js'
@@ -33,7 +33,7 @@ export function createTraceService({ engine = answerTrace } = {}) {
   app.post('/internal/trace/answer', requireAuth, async (request, response) => {
     const job = request.body
     const keys = ['conversationId','messageId','leaseId','provider','responseDetail','deadlineAt']
-    if (!job || Object.keys(job).some(key => !keys.includes(key)) || !mongoose.isObjectIdOrHexString(job.conversationId) || !mongoose.isObjectIdOrHexString(job.messageId) || typeof job.leaseId !== 'string' || job.leaseId.length > 100 || !job.leaseId || !['low','medium','high'].includes(job.responseDetail) || !['azure','inception'].includes(job.provider) || !Number.isSafeInteger(job.deadlineAt) || job.deadlineAt <= Date.now() || job.deadlineAt > Date.now()+45000) throw new AppError('Invalid TRACE execution request.', 400, 'TRACE_INVALID_JOB')
+    if (!job || Object.keys(job).some(key => !keys.includes(key)) || !mongoose.isObjectIdOrHexString(job.conversationId) || !mongoose.isObjectIdOrHexString(job.messageId) || typeof job.leaseId !== 'string' || job.leaseId.length > 100 || !job.leaseId || !['low','medium','high'].includes(job.responseDetail) || !['azure','inception'].includes(job.provider) || !Number.isSafeInteger(job.deadlineAt) || job.deadlineAt <= Date.now() || job.deadlineAt > Date.now()+getTraceLimits().turnTimeoutMs+5000) throw new AppError('Invalid TRACE execution request.', 400, 'TRACE_INVALID_JOB')
     const providerConfig = getTraceProviderConfig()
     if (providerConfig.provider !== job.provider) throw new AppError('TRACE provider configuration changed. Please retry.', 503, 'TRACE_PROVIDER_CHANGED')
     const guard = async () => {

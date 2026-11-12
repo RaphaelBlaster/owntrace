@@ -47,7 +47,7 @@ export function sanitizeMailMetadata(message = {}) {
 
 export function sanitizeMailBody(text) {
   if (typeof text !== 'string') return ''
-  return redactPhones(text.normalize('NFKC').replace(/<[^>]*>/g, ' ').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ')
+  return redactPhones(text.normalize('NFKC').replace(/<\/?[a-z!][^<>]*>/gi, ' ').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ')
     .replace(/^(?:from|to|cc|bcc|subject|sent|received|reply-to):.*$/gim, ' ')
     .replace(/https?:\/\/[^\s<>]+|www\.[^\s<>]+/gi, '[link]')
     .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, '[email]')
@@ -65,7 +65,21 @@ function validateProbability(answer, labels, stage) {
   return confidence >= .85 && margin >= .2 ? answer.choice : 'review'
 }
 
+// Job-application mail must always reach the body reader, even if the metadata classifier
+// calls it personal/marketing (e.g. a recruiter writing from gmail.com with subject "Next steps").
+const jobSubjectPattern = /\b(?:your application|application (?:received|submitted|status|update)|thank(?:s| you) for (?:applying|your application|your interest in)|applied (?:for|to)|interview|assessment|coding (?:challenge|test)|take[- ]home|online test|hackerrank|codility|offer letter|job offer|offer of employment|candidate|candidacy|recruit(?:er|ing|ment)|hiring|talent acquisition|next steps|shortlist(?:ed)?|internship|position|role at|job (?:id|opening|application)|requisition|onboarding|background check|not moving forward|other candidates)\b/i
+export function isJobSignal(message) {
+  const domain = String(message?.senderDomain || '').toLowerCase()
+  if ([...atsDomains].some(ats => domain === ats || domain.endsWith(`.${ats}`))) return true
+  return jobSubjectPattern.test(String(message?.subject || ''))
+}
+
 export async function gateMessages(inputs, signal) {
+  const gates = await gateMessagesRaw(inputs, signal)
+  return gates.map((gate, index) => gate !== 'eligible' && gate !== 'spam' && isJobSignal(inputs[index]) ? 'review' : gate)
+}
+
+async function gateMessagesRaw(inputs, signal) {
   if (!Array.isArray(inputs) || inputs.length < 1 || inputs.length > 5) return fail('jev_input_shape')
   if (!process.env.TYPESAFE_API_KEY?.trim()) throw new AppError('Configure TypeSafe before classifying mail.', 503, 'MAIL_AI_NOT_CONFIGURED')
   const state = { messages: inputs.map((message, index) => ({ index, senderDomain: message.senderDomain, subject: message.subject, occurredAt: message.occurredAt })) }

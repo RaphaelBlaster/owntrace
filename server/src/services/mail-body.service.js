@@ -7,7 +7,10 @@ import { withMicrosoftAccessToken } from './microsoft-oauth.service.js'
 import AppError from '../utils/app-error.js'
 
 const MAX_BODY_CHARS = 8000
-const MAX_RESPONSE_BYTES = 1_000_000
+// format=full JSON carries every inline text/HTML part base64-encoded; rich HTML
+// newsletters exceed 1 MB once encoded, which failed the whole analysis page.
+const MAX_RESPONSE_BYTES = 5_000_000
+const MAX_TEXT_ATTACHMENT_FETCHES = 3
 const ALLOWED_STATUSES = ['CONNECTED', 'SYNCING']
 
 function canReadMailBody(provider, connection) {
@@ -18,34 +21,98 @@ function canReadMailBody(provider, connection) {
     : provider === 'outlook' && scopes.includes(MICROSOFT_BODY_SCOPE)
 }
 
-function htmlToText(html) {
-  return String(html)
-    .replace(/<\s*(script|style|template|noscript)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<\s*br\s*\/?>|<\s*\/(?:p|div|li|tr|h[1-6])\s*>/gi, '\n')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/&#(\d+);/g, (_match, code) => String.fromCodePoint(Math.min(Number(code), 0x10ffff)))
-    .replace(/&#x([\da-f]+);/gi, (_match, code) => String.fromCodePoint(Math.min(parseInt(code, 16), 0x10ffff)))
-    .replace(/[\t\r ]+/g, ' ').replace(/ *\n */g, '\n').trim().slice(0, MAX_BODY_CHARS)
+const NAMED_ENTITIES = {
+  nbsp: ' ', lt: '<', gt: '>', quot: '"', apos: "'", ndash: '–', mdash: '—', hellip: '…',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', bull: '•', middot: '·',
+  copy: '©', reg: '®', trade: '™', euro: '€', pound: '£', yen: '¥', cent: '¢',
+  rarr: '→', larr: '←', times: '×', deg: '°', zwnj: '', zwj: '', shy: '', ensp: ' ', emsp: ' ', thinsp: ' ',
 }
 
-function collectMimeText(payload) {
-  let plain = ''
-  let html = ''
+function codePoint(value) {
+  return Number.isInteger(value) && value > 0 && value <= 0x10ffff && (value < 0xd800 || value > 0xdfff) ? String.fromCodePoint(value) : ' '
+}
+
+function htmlToText(html) {
+  return String(html)
+    .replace(/<\s*(head|script|style|template|noscript|title)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<\s*br\s*\/?>|<\s*\/(?:p|div|li|tr|table|h[1-6]|blockquote|section|article|header|footer|ul|ol)\s*>|<\s*li\b[^>]*>/gi, '\n')
+    .replace(/<\s*\/\s*t[dh]\s*>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    // Single pass so decoded output is never decoded again ("&amp;lt;" -> "&lt;", "&#38;lt;" -> "&lt;").
+    .replace(/&(?:#(\d+);?|#x([\da-f]+);?|([a-z]+);)/gi, (match, dec, hex, name) => dec ? codePoint(Number(dec))
+      : hex ? codePoint(parseInt(hex, 16))
+        : name.toLowerCase() === 'amp' ? '&' : NAMED_ENTITIES[name.toLowerCase()] ?? match)
+    .replace(/[​-‍⁠﻿­͏]/g, '')
+    .replace(/[\t\r\f\v  ]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_BODY_CHARS)
+}
+
+function partHeader(part, name) {
+  return part?.headers?.find(header => header?.name?.toLowerCase() === name)?.value || ''
+}
+
+function isAttachmentPart(part) {
+  return Boolean(part.filename) || /^\s*attachment\b/i.test(partHeader(part, 'content-disposition'))
+}
+
+function isTextLeaf(part) {
+  const mime = String(part?.mimeType || '').toLowerCase()
+  return mime === 'text/plain' || mime === 'text/html'
+}
+
+function decodePartData(part, data) {
+  // Gmail removes the transfer encoding (base64 / quoted-printable) but keeps the
+  // bytes in the part's declared charset, so decode with that charset, not UTF-8.
+  const bytes = Buffer.from(data, 'base64url')
+  const charset = partHeader(part, 'content-type').match(/charset\s*=\s*"?([^";\s]+)/i)?.[1]
+  if (charset) {
+    try { return new TextDecoder(charset.trim().toLowerCase()).decode(bytes) } catch { /* unknown label: fall back to UTF-8 */ }
+  }
+  return new TextDecoder('utf-8').decode(bytes)
+}
+
+// Text parts above Gmail's inline size limit arrive with only an attachmentId.
+function externalTextPartIds(payload) {
+  const ids = []
   function visit(part) {
-    if (!part || part.filename || part.body?.attachmentId) return
-    const mime = String(part.mimeType || '').toLowerCase()
-    if (part.body?.data && (mime === 'text/plain' || mime === 'text/html')) {
-      const decoded = Buffer.from(part.body.data, 'base64url').toString('utf8')
-      if (mime === 'text/plain') plain ||= decoded
-      else html ||= decoded
-    }
+    if (!part || isAttachmentPart(part)) return
+    if (isTextLeaf(part) && !part.body?.data && part.body?.attachmentId) ids.push(part.body.attachmentId)
     for (const child of part.parts || []) visit(child)
   }
   visit(payload)
-  return (plain || htmlToText(html)).slice(0, MAX_BODY_CHARS)
+  return ids.slice(0, MAX_TEXT_ATTACHMENT_FETCHES)
+}
+
+function collectParts(part, external) {
+  if (!part || isAttachmentPart(part)) return { plain: '', html: '' }
+  const mime = String(part.mimeType || '').toLowerCase()
+  if (isTextLeaf(part)) {
+    const attachmentId = part.body?.attachmentId
+    // A part carrying both inline data and an attachmentId is treated as an attachment.
+    const data = attachmentId ? (part.body?.data ? '' : external?.get(attachmentId)) : part.body?.data
+    if (!data) return { plain: '', html: '' }
+    const decoded = decodePartData(part, data)
+    return mime === 'text/plain' ? { plain: decoded.trim(), html: '' } : { plain: '', html: decoded }
+  }
+  const children = (part.parts || []).map(child => collectParts(child, external))
+  if (mime === 'multipart/alternative') {
+    // Alternatives are the same content in different formats: keep one of each.
+    return { plain: children.find(child => child.plain)?.plain || '', html: children.find(child => child.html)?.html || '' }
+  }
+  // multipart/mixed, related, signed, report: inline text parts are sequential content.
+  return {
+    plain: children.map(child => child.plain).filter(Boolean).join('\n\n'),
+    html: children.map(child => child.html).filter(Boolean).join('\n'),
+  }
+}
+
+function collectMimeText(payload, external) {
+  const { plain, html } = collectParts(payload, external)
+  const htmlText = html ? htmlToText(html) : ''
+  // Many senders ship a stub text/plain part ("view this email in your browser")
+  // beside the real HTML body; use the HTML text when the plain part is clearly a stub.
+  const plainIsStub = plain.length < 200 && htmlText.length > plain.length * 2 + 40
+  return (plain && !plainIsStub ? plain : htmlText || plain).slice(0, MAX_BODY_CHARS)
 }
 
 async function readBounded(response) {
@@ -89,8 +156,20 @@ async function fetchMailBody({ userId, provider, connectionId, providerId }, sig
       const { token } = await oauthClient.getAccessToken()
       if (!token) throw new AppError('Reconnect Gmail before analyzing email content.', 409, 'GOOGLE_RECONNECT_REQUIRED')
       const id = encodeURIComponent(providerId)
-      const message = await providerFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`, { headers: { authorization: `Bearer ${token}` } }, signal)
-      return collectMimeText(message.payload)
+      const headers = { authorization: `Bearer ${token}` }
+      const message = await providerFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`, { headers }, signal)
+      const external = new Map()
+      for (const attachmentId of externalTextPartIds(message.payload)) {
+        // A missing or oversized external text part must not fail the whole message:
+        // fall back to the inline parts, as before these parts were fetched.
+        try {
+          const attachment = await providerFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/attachments/${encodeURIComponent(attachmentId)}`, { headers }, signal)
+          if (typeof attachment?.data === 'string') external.set(attachmentId, attachment.data)
+        } catch (error) {
+          if (signal?.aborted || error?.code !== 'MAIL_BODY_REQUEST_FAILED') throw error
+        }
+      }
+      return collectMimeText(message.payload, external)
     })
   }
 

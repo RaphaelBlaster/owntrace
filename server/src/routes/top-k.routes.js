@@ -2,7 +2,7 @@ import { Router } from 'express'
 import requireAuth from '../middleware/auth.middleware.js'
 import AppError from '../utils/app-error.js'
 import { MailAnalysis } from '../models/mail-insight.model.js'
-import { topKState, startTopKScan, stopTopK, queueMailEnrichment } from '../services/top-k.service.js'
+import { topKState, startTopKScan, stopTopK, queueMailEnrichment, analysisMessageLimit } from '../services/top-k.service.js'
 import { queryMailInsights } from '../services/mail-insight-query.service.js'
 import { mailCategories } from '../models/mail-insight.model.js'
 
@@ -38,12 +38,12 @@ router.put('/consent', async (req, res) => {
 router.post('/scans', async (req, res) => {
   exact(req.body, ['provider'])
   await startTopKScan(req.auth.userId, req.body.provider)
-  res.status(202).json({ accepted: true, limit: 250 })
+  res.status(202).json({ accepted: true, limit: analysisMessageLimit() })
 })
 router.post('/enrichment', async (req, res) => {
   exact(req.body || {}, [])
   await queueMailEnrichment(req.auth.userId)
-  res.status(202).json({ accepted: true, limit: 250 })
+  res.status(202).json({ accepted: true, limit: analysisMessageLimit() })
 })
 router.delete('/scans/:provider', async (req, res) => {
   if (!['gmail', 'outlook'].includes(req.params.provider)) invalid()

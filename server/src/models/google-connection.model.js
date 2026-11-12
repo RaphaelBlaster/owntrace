@@ -19,6 +19,14 @@ const googleConnectionSchema = new mongoose.Schema(
     pushStatus: { type: String, enum: ['DISABLED', 'PENDING', 'ACTIVE', 'ERROR'], default: 'DISABLED' },
     pushExpiresAt: { type: Date, default: null },
     pushErrorCode: { type: String, default: null },
+    // Baseline for incremental sync: the mailbox historyId at which the last
+    // completed metadata sync is known to be complete.
+    gmailHistoryId: { type: String, default: null, select: false },
+    gmailHistoryIdUpdatedAt: { type: Date, default: null },
+    // historyId returned by the latest users.watch call. Used only as a
+    // fallback baseline for a full scan that starts after the watch was made.
+    gmailWatchHistoryId: { type: String, default: null, select: false },
+    gmailWatchHistoryAt: { type: Date, default: null },
     connectedAt: { type: Date, default: Date.now },
     lastSyncAt: { type: Date, default: null },
     status: {
@@ -40,6 +48,8 @@ const googleConnectionSchema = new mongoose.Schema(
         delete returnedObject.encryptedAccessToken
         delete returnedObject.encryptedRefreshToken
         delete returnedObject.pushErrorCode
+        delete returnedObject.gmailHistoryId
+        delete returnedObject.gmailWatchHistoryId
         return returnedObject
       },
     },

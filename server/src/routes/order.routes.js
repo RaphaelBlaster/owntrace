@@ -47,10 +47,10 @@ router.delete('/scans/:provider', async (request, response) => {
   response.status(204).end()
 })
 router.get('/', async (request, response) => {
-  exact(request.query, ['page','limit','provider','status'])
+  exact(request.query, ['page','limit','provider','status','search'])
   const number = (key, fallback, maximum) => { const raw = request.query[key]; if (raw === undefined) return fallback; if (typeof raw !== 'string' || !/^\d+$/.test(raw) || Number(raw) < 1 || Number(raw) > maximum) invalid(); return Number(raw) }
   if (request.query.provider && !['gmail','outlook'].includes(request.query.provider) || request.query.status && !orderStatuses.includes(request.query.status)) invalid()
-  response.json(await listOrderCards(request.auth.userId, { page: number('page', 1, 10000), limit: number('limit', 12, 48), provider: request.query.provider, status: request.query.status }))
+  response.json(await listOrderCards(request.auth.userId, { page: number('page', 1, 10000), limit: number('limit', 12, 48), provider: request.query.provider, status: request.query.status, search: typeof request.query.search === 'string' ? request.query.search : undefined }))
 })
 router.get('/:id', async (request, response) => response.json(await orderDetails(request.auth.userId, request.params.id)))
 export default router

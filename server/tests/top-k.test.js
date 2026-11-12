@@ -58,3 +58,18 @@ it('requires an expanded body grant while preserving the existing connection', a
   expect(state.body.connections.find(x => x.provider === 'gmail')).toMatchObject({ connected: true, bodyAccess: false })
   expect(await GoogleConnection.countDocuments({ userId: user.id })).toBe(1)
 })
+
+it('reports the configured analysis window in the unscanned insight state', async () => {
+  const { queryMailInsights } = await import('../src/services/mail-insight-query.service.js')
+  const userId = new User()._id
+  const previous = process.env.MAIL_ANALYSIS_MESSAGE_LIMIT
+  try {
+    delete process.env.MAIL_ANALYSIS_MESSAGE_LIMIT
+    expect((await queryMailInsights(userId)).scan).toMatchObject({ status: 'NOT_SCANNED', limit: 500 })
+    process.env.MAIL_ANALYSIS_MESSAGE_LIMIT = '1200'
+    expect((await queryMailInsights(userId)).scan.limit).toBe(1200)
+  } finally {
+    if (previous === undefined) delete process.env.MAIL_ANALYSIS_MESSAGE_LIMIT
+    else process.env.MAIL_ANALYSIS_MESSAGE_LIMIT = previous
+  }
+})

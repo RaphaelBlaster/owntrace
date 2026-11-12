@@ -3,6 +3,8 @@ import { MongoMemoryServer } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 
 process.env.NODE_ENV = 'test'
+// Existing TRACE tests script exact provider calls; guard tests enable the screening call explicitly.
+process.env.TRACE_GUARD = 'off'
 process.env.JWT_SECRET = 'owntrace-test-secret-that-is-longer-than-thirty-two-characters'
 process.env.CLIENT_ORIGINS = 'http://localhost:5173'
 process.env.CLIENT_APP_URL = 'http://localhost:5173'
