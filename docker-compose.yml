@@ -1,0 +1,87 @@
+# One image, three roles. MongoDB runs on the host as container owntrace-mongo
+# and is attached to owntrace-net (see DEPLOY.md).
+x-app: &app
+  build: .
+  image: owntrace:latest
+  restart: unless-stopped
+  networks: [owntrace-net]
+
+services:
+  api:
+    <<: *app
+    environment: { OWNTRACE_ROLE: api }
+    networks: [owntrace-net, owntrace-redis-net]
+    env_file: ./env/api.env
+    expose: ["5000"]
+    mem_limit: 384m
+    # Image HEALTHCHECK probes :5000, so leave PORT blank (defaults to 5000) or set 5000.
+    depends_on:
+      redis: { condition: service_healthy }
+      rag: { condition: service_healthy }
+
+  mail-worker:
+    <<: *app
+    environment: { OWNTRACE_ROLE: mail-worker }
+    networks: [owntrace-net, owntrace-redis-net]
+    env_file: ./env/mail-worker.env
+    mem_limit: 384m
+    depends_on:
+      redis: { condition: service_healthy }
+
+  rag:
+    <<: *app
+    environment: { OWNTRACE_ROLE: rag }
+    # Runs only the TRACE service, so the token/Gmail/BullMQ code is never loaded.
+    command: ["node", "server/src/trace-server.js"]
+    env_file: ./env/rag.env
+    mem_limit: 256m
+    networks:
+      owntrace-net:
+        aliases: [owntrace-trace]   # TRACE_SERVICE_URL host allow-list requires this name
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/api/health/ready',{headers:{authorization:'Bearer '+process.env.TRACE_SERVICE_TOKEN}}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
+    restart: unless-stopped
+    volumes: [redis_data:/data]
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    # Only api and mail-worker share this network; rag and caddy cannot reach redis.
+    networks:
+      owntrace-redis-net:
+        aliases: [owntrace-redis]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 64m
+    networks: [owntrace-net]
+    depends_on:
+      api: { condition: service_healthy }
+
+networks:
+  owntrace-net:
+    name: owntrace-net
+    external: true   # created by hand (DEPLOY.md 3.4); compose down never removes it
+  owntrace-redis-net:
+    internal: true
+
+volumes:
+  redis_data:
+  caddy_data:
+  caddy_config:

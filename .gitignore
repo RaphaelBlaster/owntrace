@@ -13,3 +13,7 @@ Thumbs.db
 .repowise/
 .playwright-cli/
 artifacts/
+
+# deploy
+env/*.env
+Caddyfile
