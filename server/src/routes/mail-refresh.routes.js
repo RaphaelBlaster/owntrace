@@ -1,4 +1,6 @@
 import { Router } from 'express'
+import Joi from 'joi'
+import { validate } from '../middleware/error.middleware.js'
 import requireAuth from '../middleware/auth.middleware.js'
 import AppError from '../utils/app-error.js'
 import GmailSyncJob from '../models/gmail-sync-job.model.js'
@@ -72,7 +74,7 @@ const router = Router()
 router.use(requireAuth)
 router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next() })
 
-router.post('/sync-now', async (req, res) => {
+router.post('/sync-now', validate(Joi.object({})), async (req, res) => {
   const body = req.body ?? {}
   if (typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length) {
     throw new AppError('Invalid mailbox refresh request.', 400, 'MAIL_INVALID_INPUT')

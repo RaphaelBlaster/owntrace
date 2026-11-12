@@ -115,7 +115,7 @@ export async function removeTopKSource(userId, provider, connectionId) {
 }
 export async function startTopKScan(userId, provider, { push = false, followUp = false, signal } = {}) {
   signal?.throwIfAborted()
-  if (!models[provider]) throw new AppError('Choose Gmail or Outlook.', 400, 'MAIL_INVALID_INPUT')
+  if (!Object.hasOwn(models, provider)) throw new AppError('Choose Gmail or Outlook.', 400, 'MAIL_INVALID_INPUT')
   const settings = await MailAnalysis.findOne({ userId }).select('+cursor')
   if (!settings?.enabled || settings.version !== 1 || !settings.acceptedAt) throw new AppError('Enable email analysis on Top K first.', 403, 'MAIL_CONSENT_REQUIRED')
   if (!intelligenceConfigured()) throw new AppError('Jev and Mercury must both be configured.', 503, 'MAIL_AI_NOT_CONFIGURED')

@@ -1,4 +1,6 @@
 import { Router } from 'express'
+import Joi from 'joi'
+import { validate } from '../middleware/error.middleware.js'
 import requireAuth from '../middleware/auth.middleware.js'
 import {
   MICROSOFT_OAUTH_COOKIE_NAME,
@@ -99,7 +101,8 @@ microsoftRouter.delete('/sync', async (request, response) => {
   const sync = await cancelAndWaitForSync(request.auth.userId)
   response.status(200).json({ success: true, sync: sync ? sync.toJSON() : null })
 })
-microsoftRouter.get('/subscriptions', async (request, response) => {
+const subscriptionsQuery = Joi.object({ page: Joi.string().pattern(/^\d{1,6}$/), limit: Joi.string().pattern(/^\d{1,3}$/) })
+microsoftRouter.get('/subscriptions', validate(subscriptionsQuery, 'query'), async (request, response) => {
   const result = await listMicrosoftSubscriptionsForUser(request.auth.userId, request.query)
   response.status(200).json({ success: true, ...result })
 })

@@ -16,7 +16,7 @@ function getOnboarding(request, response) {
 
 async function updateOnboarding(request, response) {
   const status = typeof request.body?.status === 'string' ? request.body.status.trim() : ''
-  const allowedCurrentStates = supportedTransitions[status]
+  const allowedCurrentStates = Object.hasOwn(supportedTransitions, status) ? supportedTransitions[status] : null
 
   if (!allowedCurrentStates) {
     throw new AppError(

@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import { rateLimit } from 'express-rate-limit'
 import mongoose from 'mongoose'
+import Joi from 'joi'
+import { validate } from '../middleware/error.middleware.js'
 import requireAuth from '../middleware/auth.middleware.js'
 import Conversation from '../models/trace-conversation.model.js'
 import User from '../models/user.model.js'
@@ -33,7 +35,8 @@ router.get('/status', (_request, response) => {
   const label=provider === 'azure' ? 'Azure OpenAI' : provider === 'inception' ? 'Inception Labs' : 'AI provider'
   response.json({configured,provider,providerLabel:label,consentEnabled:hasTraceConsent(_request.user,provider)})
 })
-router.put('/consent', async (request, response) => {
+const consentBody = Joi.object({ enabled: Joi.boolean().strict().required() })
+router.put('/consent', validate(consentBody), async (request, response) => {
   if (typeof request.body?.enabled !== 'boolean' || Object.keys(request.body).some((key) => key !== 'enabled')) throw new AppError('Choose whether to enable TRACE AI processing.', 400, 'INVALID_TRACE_CONSENT')
   await User.updateOne({ _id: request.auth.userId }, { $set: { traceAiConsent: { provider: getTraceProviderName(), version: request.body.enabled ? traceConsentVersion() : 0, acceptedAt: request.body.enabled ? new Date() : null } } })
   response.json({ consentEnabled: request.body.enabled })
@@ -54,7 +57,9 @@ router.delete('/conversations/:id', async (request, response) => {
   response.status(204).end()
 })
 // Re-resolve persisted source actions against current ownership and merged subscription ordering.
-router.post('/resolve-action', async (request, response) => {
+// Tool args are checked by normalizeToolArgs and each tool's schema.
+const actionBody = Joi.object({ type: Joi.string().max(60).required() }).unknown(true)
+router.post('/resolve-action', validate(actionBody), async (request, response) => {
   const action = request.body
   if (!action || typeof action.type !== 'string') throw new AppError('Invalid navigation action.', 400, 'INVALID_TRACE_TOOL')
   const { type, ...args } = action
@@ -71,7 +76,8 @@ router.post('/resolve-action', async (request, response) => {
   const result = await executeTraceTool(request.auth.userId, type, args)
   response.json({ actions: result.actions })
 })
-router.post('/conversations/:id/messages', limiter, async (request, response) => {
+const messageBody = Joi.object({ content: Joi.string().max(8000).required(), responseDetail: Joi.string().valid('low', 'medium', 'high'), retryMessageId: Joi.string().max(64) })
+router.post('/conversations/:id/messages', limiter, validate(messageBody), async (request, response) => {
   const conversation = await owned(request)
   const content = request.body?.content
   if (typeof content !== 'string' || !content.trim() || content.length > 8000 || Object.keys(request.body).some((key) => !['content', 'retryMessageId', 'responseDetail'].includes(key))) throw new AppError('Send a message between 1 and 8000 characters.', 400, 'INVALID_TRACE_MESSAGE')

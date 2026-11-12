@@ -5,6 +5,16 @@ function notFoundHandler(_request, _response, next) {
   next(new AppError('API route not found.', 404, 'NOT_FOUND'))
 }
 
+// Joi gate for request.body/query/params. Handlers still read the original
+// input, so their stricter checks (exact key sets, transitions) keep applying.
+// The response names only the field; Joi's message can echo the submitted value.
+function validate(schema, source = 'body') {
+  return (request, _response, next) => {
+    const { error } = schema.validate(request[source] ?? {}, { allowUnknown: true })
+    next(error ? new AppError(`Invalid ${error.details[0].path.join('.') || 'request'}.`, 400, 'VALIDATION_ERROR') : undefined)
+  }
+}
+
 function errorHandler(error, request, response, _next) {
   if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
     response.status(400).json({
@@ -41,4 +51,4 @@ function errorHandler(error, request, response, _next) {
   response.status(statusCode).json(payload)
 }
 
-export { errorHandler, notFoundHandler }
+export { errorHandler, notFoundHandler, validate }

@@ -27,6 +27,7 @@
     "googleapis": "^174.0.1",
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
+    "joi": "^17.13.9",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.2",
     "tldts": "^7.4.10"
