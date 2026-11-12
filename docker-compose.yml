@@ -5,6 +5,18 @@ x-app: &app
   image: owntrace:latest
   restart: unless-stopped
   networks: [owntrace-net]
+  # Hardening that works on any host (the AppArmor attachment is in docker-compose.apparmor.yml).
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true      # server/src has no fs writes; /tmp is the only writable path
+  tmpfs: ["/tmp"]
+  # Exec-form healthcheck so the shell-form image HEALTHCHECK is never used (no /bin/sh under AppArmor).
+  healthcheck:
+    test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+    interval: 30s
+    timeout: 5s
+    start_period: 30s
+    retries: 3
 
 services:
   api:

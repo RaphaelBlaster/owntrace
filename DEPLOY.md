@@ -60,3 +60,17 @@ Application-detail updates (POST /api/top-k/enrichment) stay inline: they only s
 ## 6. Memory
 Limits: api 384m, mail-worker 384m, rag 256m, redis 128m, caddy 64m (about 1.2 GB, plus host Mongo).
 Watch `docker stats`; add swap if the instance is tight.
+
+## 7. AppArmor (Phase 6)
+The profiles in `apparmor/` need an AppArmor host (Ubuntu or Debian AMI). The current Amazon Linux
+instance uses SELinux and has no AppArmor, so there only the hardening in `docker-compose.yml` applies
+(`no-new-privileges`, `cap_drop: ALL`, `read_only` root fs with a `/tmp` tmpfs). Do not add an
+`apparmor=` option to `docker-compose.yml`; Docker errors when the profile is missing.
+AppArmor cannot filter by destination host: egress to Google, MongoDB and Redis is limited by the compose
+networks and the EC2 security group.
+
+    sudo apparmor_parser -r -W apparmor/owntrace-*                 # load (repeat after edits/reboot)
+    docker compose -f docker-compose.yml -f docker-compose.apparmor.yml up -d   # attach
+    bash apparmor/test-apparmor.sh                                  # PASS/FAIL checks
+    docker inspect --format '{{.AppArmorProfile}}' <container>      # confirm attachment
+    sudo dmesg | grep -i apparmor                                   # denials (or journalctl -k | grep DENIED)

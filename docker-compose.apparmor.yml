@@ -1,0 +1,9 @@
+# Use on an AppArmor host (Ubuntu/Debian) after loading the profiles in apparmor/:
+#   docker compose -f docker-compose.yml -f docker-compose.apparmor.yml up -d
+services:
+  api:
+    security_opt: ["apparmor=owntrace-api"]
+  mail-worker:
+    security_opt: ["apparmor=owntrace-mail-worker"]
+  rag:
+    security_opt: ["apparmor=owntrace-rag"]
