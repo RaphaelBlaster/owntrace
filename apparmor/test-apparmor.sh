@@ -34,9 +34,9 @@ for svc in api mail-worker rag; do
 done
 
 # /etc/shadow exists in node:22-bookworm-slim but DAC may block it for a non-root user, so it is
-# not a clean proof. /etc/os-release is world-readable, exists, and is not in
+# not a clean proof. /etc/debian_version is world-readable, a real file (os-release is a symlink into /usr/lib), and is not in
 # abstractions/base nor rag's allow list, so only AppArmor can deny it (shadow kept as a bonus).
-check deny "rag: read /etc/os-release denied (outside allow list)" docker compose exec -T rag node -e "require('fs').readFileSync('/etc/os-release')"
+check deny "rag: read /etc/debian_version denied (outside allow list)" docker compose exec -T rag node -e "require('fs').readFileSync('/etc/debian_version')"
 check deny "rag: read /etc/shadow denied" docker compose exec -T rag node -e "require('fs').readFileSync('/etc/shadow')"
 
 echo
