@@ -42,6 +42,7 @@ profile owntrace-rag flags=(attach_disconnected,mediate_deleted) {
   /etc/ssl/** r,
   /etc/hosts r,
   /etc/host.conf r,
+  /etc/gai.conf r,
   @{PROC}/version_signature r,
   /etc/resolv.conf r,
   /etc/nsswitch.conf r,
