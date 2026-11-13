@@ -54,6 +54,9 @@ export async function enqueue(name, data, { dedupeId } = {}) {
 export function startWorker(name, processor, opts = {}) {
   const worker = new Worker(name, async (job) => processor(job.data, job), { connection: getWorkerConnection(), concurrency: 4, ...opts })
   worker.on('error', (error) => logEvent('warn', 'queue_worker_error', { queue: name, errorName: error?.name || 'Error' }))
+  worker.on('failed', (job, error) => {
+    if (job && job.attemptsMade >= (job.opts?.attempts || 1)) logEvent('warn', 'queue_job_failed', { queue: name, jobId: job.id, attempts: job.attemptsMade, errorName: error?.name || 'Error' })
+  })
   workers.add(worker)
   return async () => { workers.delete(worker); await worker.close() }
 }
@@ -65,5 +68,6 @@ export async function closeQueues() {
   queues.clear()
   const current = [producerConnection, workerConnection].filter(Boolean)
   producerConnection = workerConnection = undefined
-  await Promise.allSettled(current.map((redis) => redis.quit().catch(() => redis.disconnect())))
+  // quit() never resolves while Redis is down with queued commands, so cap it at 1s.
+  await Promise.allSettled(current.map((redis) => Promise.race([redis.quit(), new Promise((_r, reject) => setTimeout(() => reject(new Error('quit timeout')), 1000).unref())]).catch(() => redis.disconnect())))
 }

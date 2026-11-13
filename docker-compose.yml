@@ -1,6 +1,11 @@
 # One image, three roles. MongoDB runs on the host as container owntrace-mongo
 # and is attached to owntrace-net (see DEPLOY.md).
+x-logging: &logging
+  driver: json-file
+  options: { max-size: 10m, max-file: "3" }
+
 x-app: &app
+  logging: *logging
   build: .
   image: owntrace:latest
   restart: unless-stopped
@@ -59,8 +64,9 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --maxmemory-policy noeviction
+    command: redis-server --appendonly yes --maxmemory 96mb --maxmemory-policy noeviction
     restart: unless-stopped
+    logging: *logging
     volumes: [redis_data:/data]
     mem_limit: 128m
     healthcheck:
@@ -76,6 +82,7 @@ services:
   caddy:
     image: caddy:2
     restart: unless-stopped
+    logging: *logging
     ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
