@@ -1,6 +1,6 @@
 # Architecture
 
-OwnTrace is a modular React/Express application with MongoDB. The live deployment uses one AWS server in Mumbai: Caddy handles HTTPS and reverse proxying, the Node process serves the application and runs background workers, and MongoDB persists data. There is no active Redis intermediary or separate inference server.
+OwnTrace is a modular React/Express application with MongoDB, deployed as Docker Compose services on one AWS EC2 host (Mumbai). One image runs as `api` (HTTP API and webhooks), `mail-worker` (all background loops) and `rag` (the private TRACE service). Caddy handles HTTPS and is the only published service. Redis carries the BullMQ `mail-sync` queue between api and mail-worker. MongoDB runs on the host and remains the source of truth. Locally, `OWNTRACE_ROLE=all` (the default) runs everything in one process without Redis.
 
 ## Boundaries
 
@@ -9,6 +9,10 @@ OwnTrace is a modular React/Express application with MongoDB. The live deploymen
 | `client/` | React/Vite pages, authenticated API requests and TRACE streaming UI |
 | `server/src/routes/` | Authentication, validation and HTTP contracts |
 | `server/src/services/` | Mail access, processing, queries and background work |
+| `server/src/shared/queue.js` | The only shared module: BullMQ enqueue/worker helpers for the `mail-sync` queue |
+| `server/src/worker.js` | Background loops started by the `mail-worker` role |
+| `server/src/trace-server.js` | Entry point of the `rag` (TRACE) service |
+| Redis | BullMQ queue only; not a cache and not used for rate limiting |
 | MongoDB | Users, sessions, encrypted provider credentials, scan jobs/checkpoints, derived records and conversations |
 | External providers | Gmail, Microsoft Graph, TypeSafe Jev, Inception Mercury and optional XposedOrNot breach checks |
 
@@ -29,7 +33,7 @@ Local Vite proxies `/api` to Express on port 5000. Authentication uses a signed 
 
 Malformed model output has bounded retries/single-message recovery with validation retained. Transport errors remain failures rather than invented classifications. Failed scans retain their checkpoint for supported resumption. While a refresh runs, reads include the previous completed run for the same user and connection, bounded to250 saved messages; once refresh completes, reads use only its run. Stop, consent withdrawal and disconnect are checked before committing results.
 
-Google Pub/Sub and Microsoft Graph notifications enqueue work. Notifications arriving during active work are coalesced into a follow-up. The worker checks persisted jobs; this polling is not a full mailbox scan each second. OAuth grants, callback configuration and provider access must remain valid. Body-enabled Top K notifications use its bounded flow rather than launching a legacy metadata scan in parallel.
+Google Pub/Sub and Microsoft Graph notifications enqueue work. With `REDIS_URL` set, the api adds one `mail-sync` BullMQ job per provider and user (deduplicated by `${provider}-${userId}`); the mail-worker turns it into a due MongoDB sync job and syncs from the stored cursor (`gmailHistoryId`), not from the notification. If Redis is unreachable the api queues the MongoDB job directly. Pub/Sub redelivers unacknowledged pushes for 7 days and a daily safety poll catches stale mailboxes, so downtime is caught up without a manual rescan. Notifications arriving during active work are coalesced into a follow-up. The worker checks persisted jobs; this polling is not a full mailbox scan each second. OAuth grants, callback configuration and provider access must remain valid. Body-enabled Top K notifications use its bounded flow rather than launching a legacy metadata scan in parallel.
 
 ## Application evidence and grouping
 
@@ -55,16 +59,15 @@ For job-result lookups, a server-owned formatter produces a concise conversation
 
 ## Rate limiting
 
-The web API uses an in-memory exact sliding window. General requests, mailbox/status polling, authentication and provider callbacks have separate allowances. Background provider fetches are not browser API requests. Repeated status refreshes can exhaust their own allowance but do not consume the general API allowance. Counters are keyed by IP for these API policies and reset when the process restarts; TRACE also has its own user-based message limit.
-
-This is suitable for the current single process, with shared-IP limitations. Multiple processes would need a shared store for coordinated enforcement. Redis is not currently used for rate limiting.
+The api uses in-memory exact sliding windows keyed by client IP (general, mail-status polling, auth, provider webhooks), plus per-user limits for TRACE messages and mailbox refresh. Behind Caddy, `TRUST_PROXY=1` makes the client IP correct. Counters reset on restart and are per process, which is correct for the single api container; multiple api replicas would need a Redis store. Details: [RATE_LIMITING.md](RATE_LIMITING.md).
 
 ## Disabled optimization
 
-An optional same-host Redis write buffer exists behind `ORDER_REDIS_URL`, but it is disabled in the live deployment. Current derived writes go directly to MongoDB in page batches. Redis is neither a queryable cache nor part of the current architecture. Evaluate shared limiting or buffering only after measuring a need; do not enable it merely to support ordinary batching.
+An optional same-host Redis write buffer exists behind `ORDER_REDIS_URL`, but it is disabled in the live deployment. Current derived writes go directly to MongoDB in page batches. Redis in the stack serves only the BullMQ queue; it is not a queryable cache. Evaluate shared limiting or buffering only after measuring a need; do not enable it merely to support ordinary batching.
 
 ## References
 
+- [Deployment](../DEPLOY.md) and [rate limiting](RATE_LIMITING.md)
 - [API contracts](API.md) and [security notes](SECURITY.md)
 - [Application matching and failure handling](APPLICATIONS.md)
 - [Gmail messages and thread IDs](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages)

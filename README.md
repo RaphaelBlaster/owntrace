@@ -4,7 +4,7 @@
 
 OwnTrace turns email evidence into a clearer view of your accounts, subscriptions and important updates. Review the findings, inspect their evidence, and ask TRACE about your saved workspace.
 
-**[Open OwnTrace](https://owntrace.duckdns.org)** · [Architecture](docs/ARCHITECTURE.md) · [API reference](docs/API.md) · [Security](docs/SECURITY.md)
+**[Open OwnTrace](https://owntrace2.duckdns.org)** · [Architecture](docs/ARCHITECTURE.md) · [API reference](docs/API.md) · [Security](docs/SECURITY.md) · [Deploy](DEPLOY.md)
 
 ## Features
 
@@ -17,25 +17,39 @@ OwnTrace turns email evidence into a clearer view of your accounts, subscription
 
 ## Architecture
 
-The current deployment uses one AWS server in Mumbai. Caddy terminates HTTPS and proxies to the Node application; MongoDB stores users, connections, scan checkpoints and derived findings. Background workers run with the application. **Redis is disabled**; page batches go directly to MongoDB.
+OwnTrace runs as Docker Compose services on one AWS EC2 host (Ubuntu 24.04, Mumbai). One image serves three roles, set by `OWNTRACE_ROLE`:
+
+| Service | Role | Responsibility |
+| --- | --- | --- |
+| `caddy` | reverse proxy | HTTPS (automatic certificates), the only service with published ports (80/443) |
+| `api` | `web` | React app + Express API, auth, provider webhooks; enqueues mail syncs |
+| `mail-worker` | `worker` | Mail sync, push replay, watch renewal, daily safety poll, Top K, order scans; no HTTP API |
+| `rag` | TRACE service | TRACE retrieval and answers (`trace-server.js`); private, token-authenticated, no Redis or OAuth secrets |
+| `redis` | queue | BullMQ `mail-sync` queue only; on an internal network reachable by api and mail-worker |
+| MongoDB | data | Users, sessions, encrypted tokens, sync cursors, findings; runs on the host as `owntrace-mongo` |
 
 ```mermaid
 flowchart LR
-  subgraph AWS[AWS server]
-    Caddy[Caddy reverse proxy] --> App[React app + Express API]
-    App --> Worker[Background scan workers]
-    App <--> DB[(MongoDB)]
-    Worker -->|Batched derived writes| DB
-    App --> TRACE[TRACE read-only retrieval]
-    TRACE --> DB
-  end
   User[Browser] -->|HTTPS| Caddy
-  Mail[Gmail / Microsoft Graph] -->|Authenticated change notifications| App
-  Worker <-->|OAuth mailbox access| Mail
+  Google[Gmail via Pub/Sub] -->|OIDC-signed push| Caddy
+  subgraph EC2[AWS EC2 · Docker Compose]
+    Caddy --> API[api]
+    API -->|enqueue mail-sync| Redis[(redis · BullMQ)]
+    Redis --> Worker[mail-worker]
+    API -->|private token| RAG[rag · TRACE]
+    API <--> DB[(MongoDB)]
+    Worker <--> DB
+    RAG --> DB
+  end
+  Worker <-->|OAuth mailbox access| Mail[Gmail / Microsoft Graph]
   Worker --> Jev[Jev metadata filter]
-  Worker --> Mercury[Mercury excerpt analysis]
-  TRACE --> Mercury
+  Worker --> Mercury[Mercury analysis]
+  RAG --> Mercury
 ```
+
+**Gmail push path:** Gmail watch → Pub/Sub → `POST /api/provider-notifications/google` (OIDC verified) → one `mail-sync` job per user (deduped) → mail-worker syncs from the stored `gmailHistoryId`. MongoDB is the source of truth, so missed notifications are caught up on the next push or by the daily safety poll. If Redis is down, api falls back to queueing the sync directly in MongoDB.
+
+Containers run read-only with all capabilities dropped and per-service AppArmor profiles. See [Deploy](DEPLOY.md), [Architecture details](docs/ARCHITECTURE.md) and [Rate limiting](docs/RATE_LIMITING.md).
 
 ### Email analysis → Top K
 
@@ -119,7 +133,7 @@ npm run validate  # lint, client build, server syntax and tests
 
 ## Further optimization
 
-Possible next steps include profiling repeated queries, improving model batching and evaluating a shared Redis limiter when multiple application processes are needed. An optional same-host write-buffer implementation exists but is disabled in the live deployment; it is not part of the current read or write path.
+Rate-limit counters are in memory, which is correct for the single api container; move them to Redis before running more than one api replica. Other next steps: profiling repeated queries, improving model batching, and a restricted MongoDB user for the rag service. The optional order write buffer (`ORDER_REDIS_URL`) remains disabled.
 
 [Implementation details and limits](docs/ARCHITECTURE.md) · [Feature ownership](docs/OWNERSHIP.md)
 
