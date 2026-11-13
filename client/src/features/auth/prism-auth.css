@@ -1,0 +1,17 @@
+@import '../../demo/demo.css';
+@import '../../demo/directions.css';
+@import '../../demo/polish.css';
+@import '../../demo/prism-bits.css';
+@import '../../demo/navigation.css';
+.prism-auth-flow .auth-form{display:grid;gap:18px;margin-top:24px}
+.prism-auth-flow .auth-field{display:grid;gap:8px}
+.prism-auth-flow .auth-field label{font-size:14px;color:var(--dx-text)}
+.prism-auth-flow .auth-field input{width:100%;box-sizing:border-box;border:1px solid var(--dx-border,#dce4e9);border-radius:12px;padding:13px 15px;background:#fff;color:#172c37;font:inherit}
+.prism-auth-flow .auth-submit{border:0;border-radius:12px;padding:15px;background:#19303b;color:#fff;font:inherit;cursor:pointer}
+.prism-auth-flow .auth-submit:disabled{opacity:.6;cursor:wait}
+.prism-auth-flow .auth-field-error,.prism-auth-flow .auth-form-error{color:#a02929;font-size:13px}
+.prism-auth-flow .auth-card-heading>p{color:#5f8090;font-size:12px;text-transform:uppercase;letter-spacing:.15em}
+.prism-auth-flow .auth-card-heading h2{font-size:32px;line-height:1.2;margin-top:10px}
+.prism-auth-flow .auth-switch-copy{margin-top:24px;font-size:14px}
+.prism-auth-flow .dx-setup-main{width:100%;min-width:0;box-sizing:border-box}
+.prism-auth-flow a:focus-visible,.prism-auth-flow button:focus-visible,.prism-auth-flow input:focus-visible{outline:2px solid #24788c;outline-offset:3px}

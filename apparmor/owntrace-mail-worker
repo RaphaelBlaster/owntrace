@@ -1,0 +1,72 @@
+# AppArmor profile for the OwnTrace mail-worker container (modelled on docker-default).
+# Needs an AppArmor host (Ubuntu/Debian). Load: sudo apparmor_parser -r -W apparmor/owntrace-mail-worker
+# LIMIT: AppArmor cannot filter network traffic by destination host. Restricting egress
+# to Google APIs, MongoDB and Redis is enforced by the compose networks and the EC2
+# security group, not by this profile.
+#include <tunables/global>
+
+profile owntrace-mail-worker flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network inet tcp,
+  network inet udp,
+  network inet6 tcp,
+  network inet6 udp,
+  network netlink raw,
+
+  # Execute only node; everything else (shells, coreutils) is denied.
+  # node lives in /usr/local/bin, so the /usr/bin/** denies do not match it.
+  /usr/local/bin/node ix,
+  deny /bin/** x,
+  deny /usr/bin/** x,
+  deny /usr/sbin/** x,
+  deny /sbin/** x,
+
+  # Read-only code, libraries and config.
+  /app/ r,
+  /app/** r,
+  /app/server/node_modules/@msgpackr-extract/**.node mr,
+  deny /usr/local/lib/node_modules/** r,
+  /sys/fs/cgroup/** r,
+  @{PROC}/@{pid}/{cgroup,stat,status,maps} r,
+  @{PROC}/@{pid}/fd/ r,
+  /usr/local/** r,
+  /usr/lib/** mr,
+  /lib/** mr,
+  /etc/ssl/** r,
+  /etc/hosts r,
+  /etc/host.conf r,
+  /etc/gai.conf r,
+  @{PROC}/version_signature r,
+  /etc/resolv.conf r,
+  /etc/nsswitch.conf r,
+  /etc/passwd r,
+  /etc/group r,
+  /proc/sys/vm/overcommit_memory r,
+  /sys/devices/system/cpu/** r,
+
+  # Writes: /tmp only (tmpfs). Nothing under /app.
+  /tmp/** rwk,
+  deny /app/** w,
+
+  # docker-default style denials.
+  deny @{PROC}/* w,
+  deny @{PROC}/{[^1-9],[^1-9][^0-9],[^1-9s][^0-9y][^0-9s],[^1-9][^0-9][^0-9][^0-9]*}/** w,
+  deny @{PROC}/sys/[^k]** w,
+  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/kcore rwklx,
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/firmware/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+  deny mount,
+  deny umount,
+  deny ptrace,
+  deny signal (send) peer=unconfined,
+  # Ubuntu 24.04 confines runc/crun: without these, docker stop's SIGTERM is denied
+  # and every stop becomes a SIGKILL (shutdown handlers never run).
+  signal (receive) peer=runc,
+  signal (receive) peer=crun,
+}

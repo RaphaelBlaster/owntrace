@@ -1,10 +1,21 @@
 import AppError from '../utils/app-error.js'
+import { logEvent } from '../utils/logger.js'
 
 function notFoundHandler(_request, _response, next) {
   next(new AppError('API route not found.', 404, 'NOT_FOUND'))
 }
 
-function errorHandler(error, _request, response, _next) {
+// Joi gate for request.body/query/params. Handlers still read the original
+// input, so their stricter checks (exact key sets, transitions) keep applying.
+// The response names only the field; Joi's message can echo the submitted value.
+function validate(schema, source = 'body') {
+  return (request, _response, next) => {
+    const { error } = schema.validate(request[source] ?? {}, { allowUnknown: true })
+    next(error ? new AppError(`Invalid ${error.details[0].path.join('.') || 'request'}.`, 400, 'VALIDATION_ERROR') : undefined)
+  }
+}
+
+function errorHandler(error, request, response, _next) {
   if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
     response.status(400).json({
       success: false,
@@ -15,19 +26,29 @@ function errorHandler(error, _request, response, _next) {
   }
 
   const statusCode = error.statusCode || 500
+  const isOperationalError = error instanceof AppError
   const payload = {
     success: false,
     code: error.code || 'INTERNAL_ERROR',
-    message: statusCode >= 500 ? 'An unexpected server error occurred.' : error.message,
+    message:
+      statusCode >= 500 && !isOperationalError
+        ? 'An unexpected server error occurred.'
+        : error.message,
   }
 
   if (error.details && statusCode < 500) payload.errors = error.details
 
   if (statusCode >= 500) {
-    console.error('Unhandled API error', { name: error.name })
+    logEvent('error', 'api_request_failed', {
+      errorName: error.name,
+      method: request.method,
+      path: request.originalUrl.split('?')[0],
+      requestId: request.requestId,
+      statusCode,
+    })
   }
 
   response.status(statusCode).json(payload)
 }
 
-export { errorHandler, notFoundHandler }
+export { errorHandler, notFoundHandler, validate }

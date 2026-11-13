@@ -1,6 +1,7 @@
 import { rateLimit } from 'express-rate-limit'
 import { getAllowedOrigins } from '../config/auth.js'
 import AppError from '../utils/app-error.js'
+import SlidingWindowStore from './sliding-window-store.js'
 
 const rateLimitResponse = {
   success: false,
@@ -8,16 +9,40 @@ const rateLimitResponse = {
   message: 'Too many requests. Please wait and try again.',
 }
 
+const isMailStatus = request => request.method === 'GET' && (/^\/(google|microsoft)\/(sync|connection)\/?$/.test(request.path) || /^\/top-k\/?$/.test(request.path))
+
 const apiRateLimiter = rateLimit({
+  store: new SlidingWindowStore(),
   legacyHeaders: false,
   limit: 200,
   message: rateLimitResponse,
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: request => process.env.NODE_ENV === 'test' || isMailStatus(request),
   standardHeaders: 'draft-8',
   windowMs: 15 * 60 * 1000,
 })
 
+const mailStatusRateLimiter = rateLimit({
+  store: new SlidingWindowStore(),
+  limit: 60,
+  windowMs: 60 * 1000,
+  legacyHeaders: false,
+  standardHeaders: 'draft-8',
+  message: rateLimitResponse,
+  skip: request => process.env.NODE_ENV === 'test' || !isMailStatus(request),
+})
+
+const providerNotificationRateLimiter = rateLimit({
+  store: new SlidingWindowStore(),
+  legacyHeaders: false,
+  limit: 1000,
+  message: rateLimitResponse,
+  skip: () => process.env.NODE_ENV === 'test',
+  standardHeaders: 'draft-8',
+  windowMs: 60 * 1000,
+})
+
 const authRateLimiter = rateLimit({
+  store: new SlidingWindowStore(),
   legacyHeaders: false,
   limit: 20,
   message: rateLimitResponse,
@@ -55,4 +80,4 @@ function requireTrustedOrigin(request, _response, next) {
   return next()
 }
 
-export { apiRateLimiter, authRateLimiter, createCorsOptions, requireTrustedOrigin }
+export { apiRateLimiter, authRateLimiter, mailStatusRateLimiter, createCorsOptions, providerNotificationRateLimiter, requireTrustedOrigin }

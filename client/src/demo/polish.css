@@ -1,0 +1,101 @@
+/* Prism iteration: one hierarchy, readable mobile inventory, and guided decisions. */
+.dx-main:focus { outline: none; }
+.dx-focus-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; margin-bottom: 24px; }
+.dx-focus-card { position: relative; overflow: hidden; border-color: #a4dbea; background: linear-gradient(115deg, #fff 65%, #edfbff); }
+.dx-focus-card::before { position: absolute; inset: 0 auto 0 0; width: 4px; background: #55d4f2; content: ''; }
+.dx-focus-eyebrow, .dx-focus-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.dx-focus-eyebrow > span { display: flex; align-items: center; gap: 7px; color: #17677f; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; }
+.dx-focus-body { display: flex; gap: 16px; align-items: flex-start; padding: 23px 0; }
+.dx-focus-body > .dx-service-icon { flex-shrink: 0; width: 46px; height: 46px; }
+.dx-focus-body h2 { font-size: 21px; font-weight: 800; line-height: 1.3; letter-spacing: -.6px; margin: 0 0 9px; }
+.dx-focus-body p { font-size: 13px; line-height: 1.7; color: #617684; margin: 0; max-width: 450px; }
+.dx-focus-footer { border-top: 1px solid #deebf1; padding-top: 16px; }
+.dx-focus-footer > span { display: flex; align-items: center; gap: 7px; color: #617684; font-size: 11px; }
+.dx-renewals-card .dx-section-title { margin-bottom: 13px; }
+.dx-renewal-list > a { display: flex; gap: 13px; align-items: center; min-height: 64px; padding: 10px 0; border-top: 1px solid #edf2f5; }
+.dx-renewal-date { flex-shrink: 0; width: 38px; text-align: center; }
+.dx-renewal-date small { display: block; font-size: 9px; font-weight: 750; color: #718591; letter-spacing: .8px; }
+.dx-renewal-date strong { font-size: 22px; font-weight: 800; line-height: 1.15; }
+.dx-renewal-list > a > span:nth-last-child(2) { flex: 1; }
+.dx-renewal-list > a > span:nth-last-child(2) strong { display: block; font-size: 12px; }
+.dx-renewal-list > a > span:nth-last-child(2) small { display: block; font-size: 11px; color: #718591; margin-top: 3px; }
+.dx-renewal-list > a > b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.dv-prism-mini-avatars { display: flex; align-items: center; gap: 0; letter-spacing: 0; }
+.dv-prism-mini-avatars > span { display: grid; place-items: center; width: 26px; height: 26px; margin-left: -3px; border: 2px solid #fff; border-radius: 50%; background: #f1f5f9; }
+.dv-prism-mini-avatars > b { margin-left: 5px; color: #637887; }
+.dx-spend-bars > div { color: #fff; }
+.dx-reviewed-note { display: flex; gap: 5px; align-items: center; margin-top: 6px; color: #23647b; font-size: 10px; }
+.dx-review-note { margin: 12px 0 0; color: #718591; font-size: 11px; line-height: 1.6; }
+.dx-inventory-mobile { display: none; }
+.dx-completed-actions { display: flex; gap: 6px; }
+.dx-hero-copy h2 { font-size: clamp(30px, 2.7vw, 38px); }
+.dx-hero-copy p { font-size: 13px; line-height: 1.7; }
+.dx-review-progress { display: flex; padding: 0 0 22px; margin: 0 0 20px; list-style: none; gap: 10px; border-bottom: 1px solid #dce8ef; }
+.dx-review-progress li { display: flex; align-items: center; gap: 8px; flex: 1; color: #718591; font-size: 12px; font-weight: 650; }
+.dx-review-progress li > span { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border: 1px solid #dce8ef; border-radius: 50%; font-size: 11px; }
+.dx-review-progress .active { color: #17677f; }
+.dx-review-progress .active > span { border-color: #55d4f2; background: #e5f9fe; }
+.dx-review-evidence { padding: 20px; border: 1px solid #cde9f2; border-radius: 12px; background: #f0faff; }
+.dx-review-evidence > span { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 750; letter-spacing: 1px; color: #17677f; }
+.dx-review-evidence p { margin: 12px 0 10px; color: #253d4c; font-size: 14px; line-height: 1.7; }
+.dx-review-evidence small { font-size: 11px; color: #657f8c; }
+.dx-review-decisions { padding: 0; margin: 24px 0 0; border: 0; display: grid; gap: 10px; }
+.dx-review-decisions legend { padding: 0 0 12px; font-size: 14px; font-weight: 750; }
+.dx-review-decisions label { display: flex; gap: 11px; align-items: center; padding: 15px; border: 1px solid #d8e6ed; border-radius: 10px; cursor: pointer; font-size: 13px; }
+.dx-review-decisions label.selected { border-color: #48b6d1; background: #edfaff; }
+.dx-review-decisions input { accent-color: #167d99; }
+.dx-review-success { text-align: center; }
+.dx-success-symbol { display: grid; place-items: center; width: 66px; height: 66px; border-radius: 20px; margin: 12px auto 22px; background: #b9f66b; color: #143143; }
+.dx-review-success h3 { margin: 0 0 12px; font-size: 28px; letter-spacing: -.8px; }
+.dx-review-success > p:not(.dx-kicker) { font-size: 15px; color: #617684; }
+.dx-review-success .dx-info-box { text-align: left; }
+.dx-review-stage { animation: dx-enter 180ms ease-out both; }
+.dx-review-steps strong { font-size: 13px; line-height: 1.55; }
+.dx-app .dx-button, .dx-modal .dx-button { min-height: 42px; }
+.dx-table tbody tr { transition: background 160ms ease; }
+.dx-table tbody tr:hover { background: #f4fbff; }
+.dx-panel, .dx-stat, .dx-button { transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease; }
+.dx-renewal-list > a:hover, .dx-account-mobile-card:hover { background: #f7fcff; }
+.dx-button-primary:hover { box-shadow: 0 4px 14px #12566e24; }
+@keyframes dx-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 1100px) { .dx-focus-grid { grid-template-columns: 1fr; } }
+@media (max-width: 800px) {
+  .dx-inventory-desktop { display: none; }
+  .dx-inventory-mobile { display: grid; gap: 12px; }
+  .dx-account-mobile-card { display: block; padding: 17px; border: 1px solid #dce8ef; border-radius: 12px; }
+  .dx-account-mobile-card > div { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .dx-account-mobile-card > div:first-child { justify-content: space-between; margin-bottom: 15px; }
+  .dx-account-mobile-card > div:nth-child(2) > span:not(.dx-tag) { font-size: 11px; color: #627c8b; }
+  .dx-account-mobile-card .dx-reviewed-note { margin: 0; }
+  .dx-account-mobile-card dl { display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; margin: 15px 0 0; padding-top: 12px; border-top: 1px solid #edf2f5; }
+  .dx-account-mobile-card dt { font-size: 10px; color: #718591; margin-bottom: 4px; }
+  .dx-account-mobile-card dd { margin: 0; font-size: 12px; color: #253d4c; }
+}
+@media (max-width: 580px) {
+  .dx-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dx-stat > strong { font-size: 27px; }
+  .dx-stat > span { font-size: 10px; line-height: 1.5; min-height: 30px; }
+  .dx-stat small { font-size: 10px; line-height: 1.6; }
+  .dx-stat p { font-size: 10px; }
+  .dx-focus-grid { gap: 14px; }
+  .dx-focus-eyebrow { flex-wrap: wrap; gap: 10px; }
+  .dx-focus-body { gap: 12px; padding: 20px 0; }
+  .dx-focus-body h2 { font-size: 18px; }
+  .dx-focus-body p { font-size: 12px; }
+  .dx-focus-footer { flex-wrap: wrap; }
+  .dx-focus-footer .dx-button { width: 100%; }
+  .dx-inventory-panel { padding: 17px; }
+  .dx-inventory-panel .dx-tabs { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .dx-inventory-panel .dx-tabs button { font-size: 12px; min-height: 42px; }
+  .dx-inventory-panel .dx-filters input, .dx-inventory-panel .dx-filters select { font-size: 13px; min-height: 44px; }
+  .dx-inventory-panel .dx-filter-search { flex-basis: 100%; width: 100%; }
+  .dx-inventory-panel .dx-filters > label:not(.dx-filter-search) { flex: 1 1 0; min-width: 0; }
+  .dx-inventory-panel .dx-filters select { padding-right: 20px; }
+  .dx-account-mobile-card { padding: 15px; }
+  .dx-review-progress { gap: 6px; }
+  .dx-review-progress li { gap: 5px; font-size: 10px; }
+  .dx-review-evidence { padding: 16px; }
+  .dx-modal-footer .dx-button { flex: 1; }
+  .dx-review-steps strong { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .dx-design-scope * { animation: none !important; transition: none !important; } }

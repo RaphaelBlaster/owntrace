@@ -1,0 +1,22 @@
+.legal-shell { min-height: 100vh; background: radial-gradient(circle at 80% 0, rgba(115, 227, 160, 0.1), transparent 32rem), var(--color-bg); }
+.legal-header { display: flex; width: min(100% - 2rem, 70rem); min-height: 4.75rem; align-items: center; justify-content: space-between; gap: 1rem; margin: 0 auto; border-bottom: 1px solid var(--color-border); }
+.legal-brand { color: var(--color-text); font-size: 1.1rem; font-weight: 780; letter-spacing: -0.03em; text-decoration: none; }
+.legal-header nav { display: flex; flex-wrap: wrap; gap: 1rem; }
+.legal-header nav a { color: var(--color-text-muted); font-size: 0.84rem; font-weight: 650; text-decoration: none; }
+.legal-header a:hover { color: var(--color-accent-strong); }
+.legal-header a:focus-visible, .legal-back:focus-visible { border-radius: 0.25rem; outline: 3px solid var(--color-accent-strong); outline-offset: 4px; }
+.legal-main { width: min(100% - 2rem, 48rem); margin: 0 auto; padding: clamp(3rem, 8vw, 6rem) 0; }
+.legal-intro { padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+.legal-intro > p { margin: 0 0 0.75rem; color: var(--color-accent); font-size: 0.72rem; font-weight: 750; letter-spacing: 0.14em; text-transform: uppercase; }
+.legal-intro h1 { margin: 0; color: var(--color-text); font-size: clamp(2.5rem, 8vw, 4.5rem); letter-spacing: -0.055em; line-height: 1; }
+.legal-intro span { display: block; max-width: 40rem; margin-top: 1.25rem; color: var(--color-text-muted); font-size: 1.05rem; line-height: 1.7; }
+.legal-intro small { display: block; margin-top: 1rem; color: var(--color-warning); line-height: 1.5; }
+.legal-main section { padding-top: 2.25rem; }
+.legal-main h2 { margin: 0 0 0.8rem; color: var(--color-text); font-size: 1.35rem; letter-spacing: -0.025em; }
+.legal-main section p { margin: 0.7rem 0; color: var(--color-text-muted); line-height: 1.75; }
+.legal-main aside { margin-top: 2.5rem; padding: 1rem 1.1rem; border: 1px solid rgba(232, 191, 114, 0.28); border-radius: var(--radius-sm); color: var(--color-warning); background: rgba(232, 191, 114, 0.08); line-height: 1.65; }
+.legal-back { display: inline-flex; min-height: 2.75rem; align-items: center; margin-top: 2rem; color: var(--color-accent-strong); font-weight: 700; }
+
+@media (max-width: 34rem) {
+  .legal-header { align-items: flex-start; flex-direction: column; justify-content: center; padding: 1rem 0; }
+}

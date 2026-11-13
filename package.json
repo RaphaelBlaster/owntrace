@@ -8,13 +8,17 @@
     "dev:client": "npm run dev --prefix client",
     "dev:server": "npm run dev --prefix server",
     "build": "npm run build --prefix client",
+    "check:syntax": "node scripts/check-server-syntax.mjs",
     "lint": "npm run lint --prefix client",
+    "smoke:production": "npm run smoke:production --prefix server",
+    "start": "npm run start --prefix server",
     "test": "npm run test --prefix server",
+    "validate": "npm run lint && npm run build && npm run check:syntax && npm test",
     "setup": "npm install --prefix client && npm install --prefix server"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Anas2694/owntrace.git"
+    "url": "git+https://github.com/RaphaelBlaster/owntrace.git"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

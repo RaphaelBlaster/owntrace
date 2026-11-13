@@ -10,6 +10,7 @@ const onboardingStates = [
 
 const userSchema = new mongoose.Schema(
   {
+    workspaceGoal: { type: String, enum: ['Get organized', 'Reduce recurring costs', 'Improve account security'], default: 'Get organized' },
     name: {
       type: String,
       required: true,
@@ -32,7 +33,7 @@ const userSchema = new mongoose.Schema(
     },
     authProviders: {
       type: [String],
-      enum: ['password', 'google'],
+      enum: ['password', 'google', 'microsoft'],
       default: ['password'],
     },
     emailVerified: {
@@ -43,6 +44,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: onboardingStates,
       default: 'NOT_STARTED',
+    },
+    traceAiConsent: {
+      provider: { type: String, enum: ['azure', 'inception'], default: 'inception' },
+      version: { type: Number, default: 0 },
+      acceptedAt: { type: Date, default: null },
     },
   },
   {

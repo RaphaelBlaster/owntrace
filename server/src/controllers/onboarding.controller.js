@@ -4,6 +4,7 @@ import AppError from '../utils/app-error.js'
 const supportedTransitions = {
   PRIVACY_REVIEWED: ['NOT_STARTED', 'PRIVACY_REVIEWED'],
   GMAIL_PENDING: ['PRIVACY_REVIEWED', 'GMAIL_PENDING'],
+  COMPLETED: ['GMAIL_PENDING', 'SCAN_PENDING', 'COMPLETED'],
 }
 
 function getOnboarding(request, response) {
@@ -15,7 +16,7 @@ function getOnboarding(request, response) {
 
 async function updateOnboarding(request, response) {
   const status = typeof request.body?.status === 'string' ? request.body.status.trim() : ''
-  const allowedCurrentStates = supportedTransitions[status]
+  const allowedCurrentStates = Object.hasOwn(supportedTransitions, status) ? supportedTransitions[status] : null
 
   if (!allowedCurrentStates) {
     throw new AppError(

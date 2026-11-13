@@ -1,0 +1,315 @@
+.privacy-page {
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: clamp(2rem, 6vw, 5.5rem) clamp(1rem, 5vw, 4.5rem) 5rem;
+}
+
+.privacy-page-shell {
+  width: min(100%, 72rem);
+  margin-inline: auto;
+}
+
+.privacy-page-intro {
+  display: grid;
+  max-width: 56rem;
+  gap: 0.9rem;
+  margin-bottom: 2.2rem;
+}
+
+.privacy-page-intro p,
+.privacy-section-heading p,
+.privacy-card-label {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: 0.68rem;
+  font-weight: 790;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.privacy-page-intro h1 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: clamp(2rem, 3.5vw, 3.2rem);
+  font-weight: 780;
+  letter-spacing: -0.065em;
+  line-height: 1.12;
+}
+
+.privacy-page-intro > span {
+  max-width: 48rem;
+  color: var(--color-text-muted);
+  font-size: clamp(0.92rem, 2vw, 1.05rem);
+  line-height: 1.7;
+}
+
+.privacy-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-next-step { margin-bottom: 2rem; }
+.dashboard-next-step h2 { margin-block: 0.75rem; max-width: 34rem; }
+.dashboard-next-step > p { max-width: 44rem; }
+.privacy-filter-label { display: grid; gap: 0.6rem; max-width: 22rem; margin-bottom: 1.5rem; }
+.privacy-filter-label select { min-height: 2.75rem; border: 1px solid #7e9487; border-radius: 0.5rem; padding: 0.65rem; color: var(--color-text); background: var(--color-bg-soft); font: inherit; }
+.privacy-page :is(a, button, select, input, textarea):focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
+.privacy-list-item { overflow-wrap: anywhere; }
+
+.privacy-card {
+  min-width: 0;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.privacy-card h2,
+.privacy-card h3,
+.privacy-section-heading h2 {
+  margin: 0;
+  color: var(--color-text);
+  letter-spacing: -0.035em;
+}
+
+.privacy-card p { color: var(--color-text-muted); line-height: 1.6; }
+.privacy-card.is-wide { grid-column: span 8; }
+.privacy-card.is-narrow { grid-column: span 4; }
+.privacy-card.is-half { grid-column: span 6; }
+.privacy-card.is-full { grid-column: 1 / -1; }
+
+.privacy-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.privacy-metric {
+  min-width: 0;
+  padding: 1.15rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.025);
+  text-decoration: none;
+}
+
+.privacy-metric span { display: block; color: var(--color-text-soft); font-size: 0.7rem; font-weight: 700; }
+.privacy-metric strong { display: block; margin-top: 0.55rem; color: var(--color-text); font-size: 1.8rem; }
+
+.privacy-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.privacy-section-heading > div { display: grid; gap: 0.45rem; }
+.privacy-section-heading a { color: var(--color-accent); font-size: 0.75rem; font-weight: 700; }
+
+.privacy-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.privacy-list-item {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.privacy-list-item:first-child { border-top: 0; }
+.privacy-list-item > div { min-width: 0; }
+.privacy-list-item strong { color: var(--color-text); }
+.privacy-list-item p { margin: 0.35rem 0 0; color: var(--color-text-muted); font-size: 0.8rem; line-height: 1.55; }
+.privacy-list-item small { color: var(--color-text-soft); font-size: 0.68rem; }
+
+.privacy-subscription-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0.9rem 0 0;
+}
+
+.privacy-subscription-facts div { min-width: 0; }
+.privacy-subscription-facts dt { color: var(--color-text-soft); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; }
+.privacy-subscription-facts dd { margin: 0.2rem 0 0; color: var(--color-text); font-size: 0.74rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.privacy-status {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 1.55rem;
+  align-items: center;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  font-weight: 780;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.privacy-status.is-high { color: var(--color-danger); border-color: rgba(255, 142, 134, 0.28); background: rgba(255, 142, 134, 0.08); }
+.privacy-status.is-medium { color: var(--color-warning); border-color: rgba(255, 205, 117, 0.24); background: rgba(255, 205, 117, 0.07); }
+.privacy-status.is-good { color: var(--color-accent); border-color: rgba(139, 255, 176, 0.24); background: rgba(139, 255, 176, 0.06); }
+
+.privacy-state,
+.privacy-error {
+  display: flex;
+  min-height: 8rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.privacy-state.is-empty { display: grid; align-content: center; text-align: center; }
+.privacy-state.is-empty strong { color: var(--color-text); }
+.privacy-state.is-empty p { max-width: 36rem; margin: 0.4rem auto 0; }
+.privacy-error { min-height: auto; justify-content: flex-start; color: var(--color-danger); }
+
+.privacy-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(139, 255, 176, 0.25);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: privacy-spin 700ms linear infinite;
+}
+
+.privacy-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.privacy-pagination button,
+.privacy-action,
+.privacy-form button {
+  min-height: 2.75rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.65rem;
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.035);
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.privacy-pagination button:disabled,
+.privacy-action:disabled,
+.privacy-form button:disabled { opacity: 0.45; cursor: not-allowed; }
+.privacy-pagination span { color: var(--color-text-soft); font-size: 0.7rem; }
+
+.privacy-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.6rem; max-width: 24rem; }
+.privacy-action.is-primary,
+.privacy-form button { color: var(--color-text); border-color: var(--color-accent); background: var(--color-accent); }
+
+.privacy-score {
+  display: grid;
+  width: 9rem;
+  height: 9rem;
+  place-items: center;
+  margin: 1rem auto;
+  border: 0.7rem solid rgba(139, 255, 176, 0.16);
+  border-radius: 50%;
+  color: var(--color-text);
+  font-size: 2.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.privacy-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.privacy-form label { display: grid; gap: 0.4rem; color: var(--color-text-muted); font-size: 0.72rem; font-weight: 690; }
+.privacy-form label.is-full { grid-column: 1 / -1; }
+.privacy-form input,
+.privacy-form select,
+.privacy-form textarea {
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.65rem;
+  color: var(--color-text);
+  background: #0a1511;
+  font: inherit;
+}
+
+.privacy-form textarea { min-height: 6rem; resize: vertical; }
+.privacy-form .privacy-form-actions { display: flex; grid-column: 1 / -1; align-items: center; gap: 1rem; }
+.privacy-form .privacy-form-actions p { margin: 0; font-size: 0.72rem; }
+
+.privacy-breach-check { margin-bottom: 1rem; }
+.privacy-breach-check > p { max-width: 48rem; margin: 0 0 1rem; font-size: 0.82rem; }
+.privacy-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin: 1rem 0;
+  color: var(--color-text);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.privacy-consent input { width: 1.1rem; height: 1.1rem; margin: 0.05rem 0 0; accent-color: var(--color-accent); }
+.privacy-breach-check-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.9rem; }
+.privacy-breach-check-actions p { margin: 0; font-size: 0.72rem; }
+.privacy-breach-disclaimer { color: var(--color-text-soft) !important; font-size: 0.68rem !important; }
+.privacy-check-error { margin: 1rem 0; }
+
+.privacy-note {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-text-muted);
+  background: rgba(139, 255, 176, 0.04);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+@keyframes privacy-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 64rem) {
+  .privacy-card.is-wide,
+  .privacy-card.is-narrow,
+  .privacy-card.is-half { grid-column: 1 / -1; }
+  .privacy-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 36rem) {
+  .privacy-page { padding-top: 2rem; }
+  .privacy-page-intro h1 { font-size: clamp(2rem, 12vw, 3.3rem); }
+  .privacy-metric-grid { grid-template-columns: 1fr; }
+  .privacy-list-item { grid-template-columns: 1fr; }
+  .privacy-subscription-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .privacy-actions { justify-content: flex-start; }
+  .privacy-form { grid-template-columns: 1fr; }
+  .privacy-form label.is-full { grid-column: auto; }
+  .privacy-form .privacy-form-actions { grid-column: auto; align-items: stretch; flex-direction: column; }
+  .privacy-breach-check-actions { align-items: stretch; flex-direction: column; }
+  .privacy-section-heading { align-items: flex-start; flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .privacy-spinner { border-color: var(--color-accent); animation: none; }
+}
